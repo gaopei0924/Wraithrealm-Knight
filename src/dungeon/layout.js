@@ -26,25 +26,22 @@ function rectCells(rect) {
   return cells;
 }
 
-const WAVE_PLANS = [
-  null, // start room: no waves
+// Default plans if a caller doesn't supply stage-specific ones.
+const DEFAULT_WAVE_PLANS = [
+  null,
   [{ count: 3, types: ['minion'] }, { count: 4, types: ['minion', 'rogue'] }],
   [{ count: 4, types: ['minion', 'rogue'] }, { count: 5, types: ['minion', 'rogue', 'mage'] }],
-  [
-    { count: 4, types: ['minion', 'warrior'] },
-    { count: 4, types: ['rogue', 'mage'] },
-    { count: 5, types: ['minion', 'warrior', 'mage'] },
-  ],
-  [
-    { count: 4, types: ['warrior', 'rogue'] },
-    { count: 5, types: ['minion', 'warrior', 'mage'] },
-    { count: 6, types: ['warrior', 'rogue', 'mage'] },
-  ],
 ];
 
-export function generateLayout(seed = 1) {
+// opts: { combatCount, sizeScale, wavePlans } — wavePlans[k] is the wave array
+// for the k-th combat room (index 0 = start room → null).
+export function generateLayout(seed = 1, opts = {}) {
+  const combatCount = opts.combatCount ?? 4;
+  const sizeScale = opts.sizeScale ?? 1.0;
+  const wavePlans = opts.wavePlans ?? DEFAULT_WAVE_PLANS;
   const rand = mulberry32(seed);
   const randInt = (lo, hi) => lo + Math.floor(rand() * (hi - lo + 1));
+  const scaled = (v) => Math.max(3, Math.round(v * sizeScale));
 
   const rooms = [];
   const corridors = [];
@@ -52,11 +49,10 @@ export function generateLayout(seed = 1) {
   let prev = { gx: 0, gz: -3, w: 5, h: 6 };
   rooms.push({ ...prev, id: 0, type: 'start', waves: null });
 
-  const combatCount = 4;
-  for (let i = 1; i <= combatCount + 1; i++) {
-    const isFinal = i === combatCount + 1;
-    const w = isFinal ? 9 : randInt(6, 8);
-    const h = isFinal ? 8 : randInt(5, 7);
+  for (let i = 1; i <= combatCount; i++) {
+    const isFinal = i === combatCount;
+    const w = isFinal ? scaled(9) : scaled(randInt(6, 8));
+    const h = isFinal ? scaled(8) : scaled(randInt(5, 7));
 
     // Door row on prev room's east wall (interior, away from corners).
     const doorZ = prev.gz + 1 + randInt(0, prev.h - 3);
@@ -73,7 +69,7 @@ export function generateLayout(seed = 1) {
       w,
       h,
       type: isFinal ? 'final' : 'combat',
-      waves: WAVE_PLANS[Math.min(i, WAVE_PLANS.length - 1)],
+      waves: wavePlans[i] ?? wavePlans[wavePlans.length - 1],
     };
     rooms.push(room);
     prev = room;

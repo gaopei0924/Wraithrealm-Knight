@@ -313,7 +313,53 @@ body.touch #touch-move-zone { pointer-events: auto; }
   pointer-events: auto; box-shadow: 0 0 24px rgba(201,163,92,0.2);
   animation: gate-pulse 1.8s ease-in-out infinite;
 }
-#start-gate:hover { border-color: var(--gold); color: #f0e2bb; }
+#start-gate:hover:not(:disabled) { border-color: var(--gold); color: #f0e2bb; }
+#start-gate:disabled { opacity: 0.4; cursor: not-allowed; animation: none; }
+
+/* ---------- setup screen ---------- */
+#setup {
+  display: flex; flex-direction: column; align-items: center; gap: 18px;
+  width: min(880px, 94vw); max-height: 70vh; overflow-y: auto;
+  pointer-events: auto; padding: 6px 4px;
+}
+.setup-section { width: 100%; text-align: center; }
+.setup-label {
+  font-size: 15px; letter-spacing: 6px; color: var(--gold);
+  margin-bottom: 12px; border-bottom: 1px solid rgba(201,163,92,0.25);
+  padding-bottom: 6px;
+}
+#skill-pick-count { color: #b8a987; font-size: 13px; letter-spacing: 2px; }
+.setup-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; }
+.setup-card {
+  position: relative; font-family: inherit; cursor: pointer; text-align: center;
+  background: linear-gradient(#1a1308, #0b0703);
+  border: 1px solid #4a3a22; color: #d8c9a8;
+  border-radius: 4px; transition: transform 0.1s, border-color 0.1s, box-shadow 0.1s;
+}
+.setup-card:hover { transform: translateY(-3px); border-color: var(--gold); }
+.setup-card.diff {
+  width: 190px; padding: 14px 12px; --accent: var(--gold);
+}
+.setup-card.diff.selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 18px color-mix(in srgb, var(--accent) 40%, transparent), inset 0 0 18px rgba(0,0,0,0.6);
+}
+.setup-card.skill { width: 150px; padding: 12px 10px; }
+.setup-card.skill.selected {
+  border-color: var(--gold);
+  box-shadow: 0 0 18px rgba(201,163,92,0.4), inset 0 0 16px rgba(0,0,0,0.6);
+}
+.setup-card.skill.selected::after {
+  content: '✓'; position: absolute; top: 4px; right: 8px; color: var(--gold); font-size: 15px;
+}
+.card-icon { font-size: 30px; margin-bottom: 4px; }
+.card-name { font-size: 17px; color: var(--gold); letter-spacing: 3px; }
+.setup-card.diff .card-name { color: var(--accent); font-size: 20px; }
+.card-sub { font-size: 10px; letter-spacing: 3px; color: #8a7a58; margin: 2px 0 6px; }
+.card-desc { font-size: 11px; color: #b8a987; line-height: 1.5; letter-spacing: 0.5px; }
+
+.objective-line.stage { color: var(--gold); font-size: 12px; margin-top: 4px; }
+.action-btn.insufficient { opacity: 0.45; }
 @keyframes gate-pulse {
   0%, 100% { box-shadow: 0 0 18px rgba(201,163,92,0.15); }
   50% { box-shadow: 0 0 30px rgba(201,163,92,0.4); }

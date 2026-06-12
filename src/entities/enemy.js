@@ -23,10 +23,17 @@ export const ENEMY_TYPES = {
 let nextId = 1;
 
 export class Enemy {
-  constructor(type, charData, scene, physics, sfx) {
+  constructor(type, charData, scene, physics, sfx, mods = { hp: 1, damage: 1, speed: 1 }) {
     this.id = nextId++;
     this.type = type;
-    this.def = ENEMY_TYPES[type];
+    const base = ENEMY_TYPES[type];
+    // Per-instance scaled def (never mutate the shared ENEMY_TYPES entry).
+    this.def = {
+      ...base,
+      hp: Math.round(base.hp * mods.hp),
+      damage: +(base.damage * mods.damage).toFixed(1),
+      speed: base.speed * mods.speed,
+    };
     this.char = new Character(charData, scene, this.def.scale);
     this.physics = physics;
     this.sfx = sfx;
@@ -40,6 +47,8 @@ export class Enemy {
     this.knockback = null;
     this.dead = false;
     this.removeAt = Infinity;
+    this.slowUntil = 0;
+    this.slowFactor = 1;
 
     const spawnAnim = this.char.has('Spawn_Ground_Skeletons') ? 'Spawn_Ground_Skeletons' : 'Spawn_Ground';
     this.spawnDuration = Math.min(1.2, this.char.clipDuration(spawnAnim) / 1.4);
@@ -106,6 +115,15 @@ export class Enemy {
     this.stateTime = 0;
   }
 
+  get effectiveSpeed() {
+    return performance.now() < this.slowUntil ? this.def.speed * this.slowFactor : this.def.speed;
+  }
+
+  applySlow(factor, duration) {
+    this.slowFactor = factor;
+    this.slowUntil = performance.now() + duration * 1000;
+  }
+
   updateChase(dt, dist, yaw, toPlayer, playerAlive) {
     if (!playerAlive) {
       this.char.play('Idle');
@@ -120,10 +138,11 @@ export class Enemy {
       return;
     }
     const dir = toPlayer.normalize();
-    this.physics.moveActor(this.actor, dir.x * this.def.speed * dt, dir.z * this.def.speed * dt);
+    const speed = this.effectiveSpeed;
+    this.physics.moveActor(this.actor, dir.x * speed * dt, dir.z * speed * dt);
     this.char.faceToward(yaw, dt, 8);
     const run = this.char.has('Walking_D_Skeletons') && this.def.speed < 4 ? 'Walking_D_Skeletons' : 'Running_A';
-    this.char.play(run, { timeScale: this.def.speed / 3.5 });
+    this.char.play(run, { timeScale: Math.max(0.4, speed / 3.5) });
   }
 
   startStrike() {

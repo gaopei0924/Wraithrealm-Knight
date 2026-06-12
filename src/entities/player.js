@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { Character } from './character.js';
+import { SKILLS, DEFAULT_LOADOUT } from '../combat/skills.js';
 
 const HIDDEN_MESHES = ['1H_Sword_Offhand', 'Badge_Shield', 'Rectangle_Shield', 'Spike_Shield', '2H_Sword'];
 
@@ -40,7 +41,6 @@ export class Player {
     this.comboStage = 0;
     this.comboHitDone = false;
     this.rollCooldownLeft = 0;
-    this.skillCooldowns = { whirlwind: 0, slam: 0 };
     this.invincible = false; // roll i-frames
     this.hitInvulnLeft = 0; // post-hit grace so enemies can't stun-lock
     this.rollDir = { x: 0, z: 1 };
@@ -48,7 +48,12 @@ export class Player {
     this.xp = 0;
     this.xpToNext = 60;
 
-    this.events = { onSwing: null, onWhirlwind: null, onSlam: null, onDeath: null, onLevelUp: null };
+    // Two-skill loadout bound to slots 0 (K) and 1 (L).
+    this.loadout = DEFAULT_LOADOUT.map((id) => SKILLS[id]);
+    this.skillCd = [0, 0];
+    this.buff = null; // { damageMult, lifesteal, until }
+
+    this.events = { onSwing: null, onSkill: null, onDeath: null, onLevelUp: null };
     this.char.play('Idle');
 
     // Player carries a faint warm light so they're always readable in the dark.
@@ -65,6 +70,20 @@ export class Player {
     return this.state !== 'dead';
   }
 
+  // Effective stats fold in the active buff (bloodlust).
+  get damageMult() {
+    return this.stats.damageMult * (this.buff?.damageMult ?? 1);
+  }
+
+  get lifesteal() {
+    return this.stats.lifesteal + (this.buff?.lifesteal ?? 0);
+  }
+
+  setLoadout(ids) {
+    this.loadout = ids.map((id) => SKILLS[id]).filter(Boolean);
+    this.skillCd = this.loadout.map(() => 0);
+  }
+
   syncFromPhysics() {
     const pos = this.actor.body.translation();
     this.char.setPosition(pos.x, pos.z);
@@ -77,9 +96,11 @@ export class Player {
     }
     this.stateTime += dt;
     this.rollCooldownLeft = Math.max(0, this.rollCooldownLeft - dt);
-    this.skillCooldowns.whirlwind = Math.max(0, this.skillCooldowns.whirlwind - dt);
-    this.skillCooldowns.slam = Math.max(0, this.skillCooldowns.slam - dt);
+    for (let i = 0; i < this.skillCd.length; i++) {
+      this.skillCd[i] = Math.max(0, this.skillCd[i] - dt);
+    }
     this.mp = Math.min(this.stats.maxMp, this.mp + this.stats.mpRegen * dt);
+    if (this.buff && performance.now() > this.buff.until) this.buff = null;
 
     if (this.hitInvulnLeft > 0) {
       this.hitInvulnLeft -= dt;
@@ -121,14 +142,8 @@ export class Player {
       this.startAttack(0);
       return true;
     }
-    if (input.wasPressed('KeyK') && this.skillCooldowns.whirlwind <= 0 && this.mp >= 30) {
-      this.startWhirlwind();
-      return true;
-    }
-    if (input.wasPressed('KeyL') && this.skillCooldowns.slam <= 0 && this.mp >= 25) {
-      this.startSlam();
-      return true;
-    }
+    if (input.wasPressed('KeyK') && this.useSkill(0)) return true;
+    if (input.wasPressed('KeyL') && this.useSkill(1)) return true;
     if (input.wasPressed('KeyQ')) this.drinkPotion();
     return false;
   }
@@ -175,7 +190,7 @@ export class Player {
     if (!this.comboHitDone && progress >= def.hitAt) {
       this.comboHitDone = true;
       const isFinisher = this.comboStage === COMBO.length - 1;
-      const damage = def.damage * this.stats.damageMult * (isFinisher ? this.stats.comboFinisherBonus : 1);
+      const damage = def.damage * this.damageMult * (isFinisher ? this.stats.comboFinisherBonus : 1);
       this.events.onSwing?.({
         origin: this.position.clone(),
         facing: this.char.facing,
@@ -226,50 +241,50 @@ export class Player {
     }
   }
 
-  startWhirlwind() {
-    this.mp -= 30;
-    this.skillCooldowns.whirlwind = 5;
+  // Returns true if the skill in `slot` fired (enough MP, off cooldown).
+  useSkill(slot) {
+    const skill = this.loadout[slot];
+    if (!skill || this.skillCd[slot] > 0 || this.mp < skill.mp) return false;
+    this.mp -= skill.mp;
+    this.skillCd[slot] = skill.cooldown;
     this.enterState('skill');
-    this.skillKind = 'whirlwind';
+    this.activeSkill = skill;
     this.skillHitDone = false;
-    const speed = 1.35;
-    this.skillDuration = this.char.clipDuration('2H_Melee_Attack_Spin') / speed;
-    this.char.play('2H_Melee_Attack_Spin', { fade: 0.08, loop: false, timeScale: speed, force: true });
-    this.sfx.whirl();
-  }
-
-  startSlam() {
-    this.mp -= 25;
-    this.skillCooldowns.slam = 6;
-    this.enterState('skill');
-    this.skillKind = 'slam';
-    this.skillHitDone = false;
-    const speed = 1.3;
-    this.skillDuration = this.char.clipDuration('Block_Attack') / speed;
-    this.char.play('Block_Attack', { fade: 0.08, loop: false, timeScale: speed, force: true });
-    this.sfx.swing();
+    this.skillDuration = this.char.clipDuration(skill.anim) / skill.animSpeed;
+    this.char.play(skill.anim, { fade: 0.08, loop: false, timeScale: skill.animSpeed, force: true });
+    this.sfx[skill.sfx]?.();
+    return true;
   }
 
   updateSkill(dt) {
+    const skill = this.activeSkill;
     const progress = this.stateTime / this.skillDuration;
-    if (!this.skillHitDone && progress >= 0.42) {
+
+    // Dash skills lunge the player forward during the wind-up.
+    if (skill.effect.dash && progress < 0.55) {
+      const v = skill.effect.dash;
+      this.physics.moveActor(
+        this.actor,
+        Math.sin(this.char.facing) * v * dt,
+        Math.cos(this.char.facing) * v * dt,
+      );
+    }
+
+    if (!this.skillHitDone && progress >= skill.hitAt) {
       this.skillHitDone = true;
-      if (this.skillKind === 'whirlwind') {
-        this.events.onWhirlwind?.({
-          origin: this.position.clone(),
-          range: 3.6,
-          damage: 30 * this.stats.damageMult,
-        });
-      } else {
-        this.events.onSlam?.({
-          origin: this.position.clone(),
-          facing: this.char.facing,
-          range: 3.2,
-          arc: 1.4,
-          damage: 18 * this.stats.damageMult,
-          knockback: 7,
-        });
+      if (skill.effect.type === 'buff') {
+        this.buff = {
+          damageMult: skill.effect.damageMult,
+          lifesteal: skill.effect.lifesteal,
+          until: performance.now() + skill.effect.duration * 1000,
+        };
       }
+      this.events.onSkill?.({
+        skill,
+        origin: this.position.clone(),
+        facing: this.char.facing,
+        damageMult: this.damageMult,
+      });
     }
     if (progress >= 1) this.enterState('idle');
   }

@@ -38,6 +38,7 @@
       <div id="objective">
         <div class="objective-title">目標</div>
         <div class="objective-line">◆ <span id="objective-text">消滅所有敵人</span></div>
+        <div class="objective-line stage" id="stage-tag">第 1/3 關 · 石牢</div>
       </div>
     </div>
 
@@ -96,8 +97,21 @@
     <div class="overlay-sub" style="margin-top:-6px">WRAITHREALM KNIGHT</div>
     <div id="loading-bar"><div id="loading-fill"></div></div>
     <div id="loading-text">喚醒亡者中…</div>
-    <button id="start-gate" class="hidden">▶ 進入地城</button>
-    <div id="loading-hint" class="desktop-only">WASD 移動 · J/左鍵 攻擊（三連擊） · Space/右鍵 翻滾（無敵幀） · K 旋風斬 · L 盾擊 · Q 藥水</div>
+
+    <!-- setup: difficulty + skill loadout (revealed when assets are ready) -->
+    <div id="setup" class="hidden allow-scroll">
+      <div class="setup-section">
+        <div class="setup-label">難度</div>
+        <div id="difficulty-row" class="setup-row"></div>
+      </div>
+      <div class="setup-section">
+        <div class="setup-label">選擇兩個技能 <span id="skill-pick-count">(0/2)</span></div>
+        <div id="skill-grid" class="setup-row"></div>
+      </div>
+      <button id="start-gate" disabled>▶ 進入地城</button>
+    </div>
+
+    <div id="loading-hint" class="desktop-only">WASD 移動 · J/左鍵 攻擊（三連擊） · Space/右鍵 翻滾（無敵幀） · K / L 技能 · Q 藥水</div>
     <div id="loading-hint-mobile" class="touch-only">左側拖曳 移動 · 右側按鍵 攻擊/技能/翻滾 · 建議橫向全螢幕</div>
   </div>
 

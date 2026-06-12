@@ -5,14 +5,15 @@ import { mulberry32 } from './layout.js';
 // sizes from tile-manifest.json. Nothing here assumes a tile is 4m — the
 // grid unit comes from the manifest.
 
-const FLOOR_VARIANTS = [
+// Fallback palettes if a stage theme isn't supplied.
+const DEFAULT_FLOORS = [
   ['floor_tile_large', 62],
   ['floor_tile_large_rocks', 14],
   ['floor_dirt_large', 12],
   ['floor_dirt_large_rocky', 12],
 ];
 
-const WALL_VARIANTS = [
+const DEFAULT_WALLS = [
   ['wall', 64],
   ['wall_cracked', 16],
   ['wall_broken', 10],
@@ -57,6 +58,7 @@ export class DungeonBuilder {
     this.scene = scene;
     this.G = assets.gridSize;
     this.torchPoints = [];
+    this.staticBodies = [];
     this.group = new THREE.Group();
     scene.add(this.group);
   }
@@ -65,11 +67,23 @@ export class DungeonBuilder {
     return [x * this.G + this.G / 2, z * this.G + this.G / 2];
   }
 
-  async build(layout) {
+  // Track every static collider so the whole stage can be torn down on transition.
+  trackBox(cx, cy, cz, hx, hy, hz) {
+    const body = this.physics.addStaticBox(cx, cy, cz, hx, hy, hz);
+    this.staticBodies.push(body);
+    return body;
+  }
+
+  async build(layout, theme = {}) {
+    this.theme = theme;
+    this.floorVariants = theme.floors ?? DEFAULT_FLOORS;
+    this.wallVariants = theme.walls ?? DEFAULT_WALLS;
+    this.torchChance = theme.torchChance ?? 0.22;
+
     const rand = mulberry32(layout.seed * 7919 + 13);
     const names = [
-      ...FLOOR_VARIANTS.map((v) => v[0]),
-      ...WALL_VARIANTS.map((v) => v[0]),
+      ...this.floorVariants.map((v) => v[0]),
+      ...this.wallVariants.map((v) => v[0]),
       ...EDGE_PROPS.map((v) => v[0]),
       'wall_gated', 'wall_doorway', 'pillar', 'torch_mounted',
       'banner_patternA_red', 'banner_shield_red', 'chest_gold', 'wall_corner_small',
@@ -83,10 +97,27 @@ export class DungeonBuilder {
     return this.roomBounds(layout);
   }
 
+  // Remove all meshes + colliders for this stage so the next can be built clean.
+  dispose() {
+    this.scene.remove(this.group);
+    this.group.traverse((o) => {
+      if (o.isMesh) {
+        o.geometry?.dispose?.();
+        if (Array.isArray(o.material)) o.material.forEach((m) => m.dispose?.());
+        else o.material?.dispose?.();
+      }
+    });
+    for (const body of this.staticBodies) this.physics.removeBody(body);
+    this.staticBodies = [];
+    for (const list of this.gatesByRoom?.values() ?? []) {
+      for (const gate of list) if (gate.body) this.physics.removeBody(gate.body);
+    }
+  }
+
   buildFloors(layout, rand) {
     for (const key of layout.floor.keys()) {
       const [x, z] = key.split(',').map(Number);
-      const [name] = pickWeighted(rand, FLOOR_VARIANTS);
+      const [name] = pickWeighted(rand, this.floorVariants);
       const tile = this.assets.tileSync(name);
       const info = this.assets.tileInfo(name);
       const [cx, cz] = this.cellCenter(x, z);
@@ -129,7 +160,7 @@ export class DungeonBuilder {
     this.group.add(holder);
 
     if (collider) {
-      this.physics.addStaticBox(ex, info.size[1] / 2, ez,
+      this.trackBox(ex, info.size[1] / 2, ez,
         dir < 2 ? depth / 2 : this.G / 2,
         info.size[1] / 2,
         dir < 2 ? this.G / 2 : depth / 2,
@@ -140,7 +171,7 @@ export class DungeonBuilder {
 
   buildWalls(layout, rand) {
     for (const wall of layout.walls) {
-      const [name] = pickWeighted(rand, WALL_VARIANTS);
+      const [name] = pickWeighted(rand, this.wallVariants);
       const holder = this.placeWallPiece(name, wall.x, wall.z, wall.dir);
 
       // South-edge walls sit between the camera and the floor — squash them
@@ -151,7 +182,7 @@ export class DungeonBuilder {
       }
 
       // Mounted torch on some inner walls — recorded as light anchor points.
-      if (rand() < 0.22) {
+      if (rand() < this.torchChance) {
         const [cx, cz] = this.cellCenter(wall.x, wall.z);
         const [dx, dz] = DIR_VEC[wall.dir];
         const tx = cx + dx * (this.G / 2 - 0.45);
@@ -232,7 +263,7 @@ export class DungeonBuilder {
           const info = this.assets.tileInfo('pillar');
           pillar.position.set(cx - (info.min[0] + info.max[0]) / 2, 0, cz - (info.min[2] + info.max[2]) / 2);
           this.group.add(pillar);
-          this.physics.addStaticBox(cx, 2, cz, 0.75, 2, 0.75);
+          this.trackBox(cx, 2, cz, 0.75, 2, 0.75);
         }
       }
     }
@@ -253,7 +284,7 @@ export class DungeonBuilder {
         prop.rotation.y = rand() * Math.PI * 2;
         this.group.add(prop);
         if (solid) {
-          this.physics.addStaticBox(jx, info.size[1] / 2, jz,
+          this.trackBox(jx, info.size[1] / 2, jz,
             Math.min(1.1, info.size[0] / 2), info.size[1] / 2, Math.min(1.1, info.size[2] / 2));
         }
       }

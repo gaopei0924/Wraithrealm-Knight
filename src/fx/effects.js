@@ -7,6 +7,7 @@ export class Effects {
     this.items = []; // { mesh, update(dt) → false when finished }
     this.orbs = [];
     this.bolts = [];
+    this.playerBolts = [];
 
     this.arcMaterial = new THREE.MeshBasicMaterial({
       color: 0xffc878,
@@ -150,6 +151,50 @@ export class Effects {
       return true;
     });
     return hits;
+  }
+
+  // Player skill projectile (fireball). Travels straight; explodes on the
+  // first enemy it reaches or at end of life. onExplode(pos, effect) handles AoE.
+  firePlayerBolt(from, facing, effect) {
+    const geo = new THREE.SphereGeometry(0.32, 10, 10);
+    const mat = new THREE.MeshBasicMaterial({ color: effect.color ?? 0xff7a22 });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.copy(from).setY(1.3);
+    const dir = new THREE.Vector3(Math.sin(facing), 0, Math.cos(facing)).normalize();
+    const light = new THREE.PointLight(effect.color ?? 0xff7a22, 10, 7);
+    mesh.add(light);
+    this.scene.add(mesh);
+    this.playerBolts.push({ mesh, dir, effect, age: 0 });
+  }
+
+  updatePlayerBolts(dt, enemies, onExplode) {
+    this.playerBolts = this.playerBolts.filter((bolt) => {
+      bolt.age += dt;
+      bolt.mesh.position.addScaledVector(bolt.dir, bolt.effect.speed * dt);
+      bolt.mesh.rotation.y += dt * 12;
+      const flat = bolt.mesh.position.clone().setY(0);
+      const hit = enemies.find(
+        (e) => !e.dead && e.position.clone().setY(0).distanceTo(flat) < (e.def.radius + 0.5),
+      );
+      if (hit || bolt.age > 2.2) {
+        onExplode(bolt.mesh.position.clone(), bolt.effect);
+        this.scene.remove(bolt.mesh);
+        return false;
+      }
+      return true;
+    });
+  }
+
+  // Clear all transient effects (used on stage transitions).
+  reset() {
+    for (const o of this.orbs) this.scene.remove(o.mesh);
+    for (const b of this.bolts) this.scene.remove(b.mesh);
+    for (const b of this.playerBolts) this.scene.remove(b.mesh);
+    for (const it of this.items) this.scene.remove(it.mesh);
+    this.orbs = [];
+    this.bolts = [];
+    this.playerBolts = [];
+    this.items = [];
   }
 
   update(dt) {

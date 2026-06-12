@@ -6,15 +6,21 @@ import * as THREE from 'three';
 const POOL_SIZE = 7;
 
 export class TorchLights {
-  constructor(scene, torchPoints) {
+  constructor(scene, torchPoints, color = 0xff7a2a) {
+    this.scene = scene;
     this.torchPoints = torchPoints;
     this.lights = [];
     for (let i = 0; i < POOL_SIZE; i++) {
-      const light = new THREE.PointLight(0xff7a2a, 0, 11, 1.8);
+      const light = new THREE.PointLight(color, 0, 11, 1.8);
       scene.add(light);
       this.lights.push(light);
     }
     this.time = Math.random() * 100;
+  }
+
+  dispose() {
+    for (const light of this.lights) this.scene.remove(light);
+    this.lights = [];
   }
 
   update(playerPos, dt) {

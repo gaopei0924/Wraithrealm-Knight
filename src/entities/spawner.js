@@ -3,7 +3,7 @@ import { Enemy, ENEMY_TYPES } from './enemy.js';
 // Per-room wave director: locks gates when the player enters an uncleared
 // combat room, spawns waves until the plan is exhausted, then unlocks.
 export class WaveDirector {
-  constructor({ rooms, builder, assets, scene, physics, sfx, events }) {
+  constructor({ rooms, builder, assets, scene, physics, sfx, events, mods }) {
     this.rooms = rooms;
     this.builder = builder;
     this.assets = assets;
@@ -11,6 +11,7 @@ export class WaveDirector {
     this.physics = physics;
     this.sfx = sfx;
     this.events = events; // { onWaveStart, onRoomCleared, onAllCleared, onEnemySpawned }
+    this.mods = mods ?? { hp: 1, damage: 1, speed: 1 };
 
     this.enemies = [];
     this.activeRoom = null;
@@ -109,7 +110,7 @@ export class WaveDirector {
   async spawnEnemy(type, x, z, player) {
     const def = ENEMY_TYPES[type];
     const charData = await this.assets.character(def.model);
-    const enemy = new Enemy(type, charData, this.scene, this.physics, this.sfx);
+    const enemy = new Enemy(type, charData, this.scene, this.physics, this.sfx, this.mods);
     enemy.setPosition(x, z);
     enemy.onHitPlayer = (damage) => {
       const hit = player.takeDamage(damage);
@@ -142,5 +143,16 @@ export class WaveDirector {
 
   get aliveEnemies() {
     return this.enemies.filter((e) => !e.dead);
+  }
+
+  // Tear down every enemy (corpses included) and any pending spawns.
+  disposeAll() {
+    for (const enemy of this.enemies) {
+      if (!enemy.dead) this.physics.removeBody(enemy.actor.body);
+      enemy.dispose(this.scene);
+    }
+    this.enemies = [];
+    this.pendingSpawns = [];
+    this.activeRoom = null;
   }
 }

@@ -38,9 +38,11 @@ export class Engine {
   setupLights() {
     const ambient = new THREE.AmbientLight(0x2a2018, 0.55);
     this.scene.add(ambient);
+    this.ambient = ambient;
 
     const hemi = new THREE.HemisphereLight(0x4a3a28, 0x0a0806, 0.35);
     this.scene.add(hemi);
+    this.hemi = hemi;
 
     // One dim shadow-casting key light, angled like cold moonlight from a grate.
     const key = new THREE.DirectionalLight(0x8a7355, 0.5);
@@ -61,6 +63,16 @@ export class Engine {
     this.camera.aspect = window.innerWidth / window.innerHeight;
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(window.innerWidth, window.innerHeight);
+  }
+
+  // Re-tint scene atmosphere for a biome theme.
+  applyTheme(theme) {
+    this.scene.background.setHex(theme.fog);
+    this.scene.fog.color.setHex(theme.fog);
+    this.scene.fog.density = theme.fogDensity;
+    this.ambient.color.setHex(theme.ambient);
+    this.hemi.color.setHex(theme.hemiSky);
+    this.keyLight.color.setHex(theme.key);
   }
 
   // Keeps the shadow camera centered on the action as the player traverses rooms.

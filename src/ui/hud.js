@@ -1,5 +1,7 @@
 // DOM HUD: bars, wave banner, kills, minimap, cooldowns, damage numbers,
-// upgrade cards, end screens. All game→HUD flow goes through this class.
+// upgrade cards, setup + end screens. All game→HUD flow goes through this class.
+import { SKILL_LIST, DEFAULT_LOADOUT } from '../combat/skills.js';
+
 const $ = (id) => document.getElementById(id);
 
 export class Hud {
@@ -43,6 +45,63 @@ export class Hud {
     $('loading').style.display = 'none';
   }
 
+  // Difficulty + skill-loadout chooser. Calls onConfirm(difficulty, [skillIds]).
+  showSetup(difficulties, onConfirm) {
+    $('loading-text').textContent = '整裝待發';
+    const diffRow = $('difficulty-row');
+    const skillGrid = $('skill-grid');
+    const startBtn = $('start-gate');
+    const pickLabel = $('skill-pick-count');
+
+    let chosenDiff = 'normal';
+    const chosenSkills = [...DEFAULT_LOADOUT];
+
+    // difficulty cards
+    diffRow.innerHTML = '';
+    for (const diff of Object.values(difficulties)) {
+      const card = document.createElement('button');
+      card.className = 'setup-card diff' + (diff.id === chosenDiff ? ' selected' : '');
+      card.style.setProperty('--accent', diff.accent);
+      card.innerHTML = `<div class="card-name">${diff.name}</div><div class="card-sub">${diff.subtitle}</div><div class="card-desc">${diff.desc}</div>`;
+      card.addEventListener('click', () => {
+        chosenDiff = diff.id;
+        for (const c of diffRow.children) c.classList.remove('selected');
+        card.classList.add('selected');
+      });
+      diffRow.appendChild(card);
+    }
+
+    // skill cards (pick exactly 2)
+    const refresh = () => {
+      pickLabel.textContent = `(${chosenSkills.length}/2)`;
+      startBtn.disabled = chosenSkills.length !== 2;
+      for (const c of skillGrid.children) {
+        c.classList.toggle('selected', chosenSkills.includes(c.dataset.id));
+      }
+    };
+    skillGrid.innerHTML = '';
+    for (const skill of SKILL_LIST) {
+      const card = document.createElement('button');
+      card.className = 'setup-card skill';
+      card.dataset.id = skill.id;
+      card.innerHTML = `<div class="card-icon">${skill.icon}</div><div class="card-name">${skill.name}</div><div class="card-desc">${skill.desc}</div>`;
+      card.addEventListener('click', () => {
+        const i = chosenSkills.indexOf(skill.id);
+        if (i >= 0) chosenSkills.splice(i, 1);
+        else if (chosenSkills.length < 2) chosenSkills.push(skill.id);
+        refresh();
+      });
+      skillGrid.appendChild(card);
+    }
+    refresh();
+
+    $('setup').classList.remove('hidden');
+    startBtn.addEventListener('click', () => {
+      if (chosenSkills.length !== 2) return;
+      onConfirm(difficulties[chosenDiff], chosenSkills);
+    }, { once: true });
+  }
+
   update(player, director) {
     $('hp-fill').style.width = `${(player.hp / player.stats.maxHp) * 100}%`;
     $('hp-text').textContent = `${Math.ceil(player.hp)}/${player.stats.maxHp}`;
@@ -56,13 +115,39 @@ export class Hud {
     $('exp-fill').style.width = `${expPct}%`;
     $('exp-text').textContent = `EXP ${expPct}%`;
 
-    this.setCooldown('cd-whirl-bar', player.skillCooldowns.whirlwind, 5);
-    this.setCooldown('cd-slam-bar', player.skillCooldowns.slam, 6);
+    // Two skill slots, cooldown ratios from the equipped loadout.
+    const s0 = player.loadout[0];
+    const s1 = player.loadout[1];
+    if (s0) this.setCooldown('cd-whirl-bar', player.skillCd[0], s0.cooldown);
+    if (s1) this.setCooldown('cd-slam-bar', player.skillCd[1], s1.cooldown);
     this.setCooldown('cd-roll-bar', player.rollCooldownLeft, player.stats.rollCooldown);
+    // Dim skill buttons when on cooldown or short on MP (mobile feedback).
+    $('btn-whirl').classList.toggle('insufficient', s0 && (player.skillCd[0] > 0 || player.mp < s0.mp));
+    $('btn-slam').classList.toggle('insufficient', s1 && (player.skillCd[1] > 0 || player.mp < s1.mp));
+    $('btn-roll').classList.toggle('insufficient', player.rollCooldownLeft > 0);
   }
 
   setCooldown(id, left, total) {
     $(id).style.transform = `scaleY(${Math.max(0, Math.min(1, left / total))})`;
+  }
+
+  // Reflect the equipped loadout on the two skill buttons + hotbar slots.
+  setSkillButtons(loadout) {
+    const [a, b] = loadout;
+    if (a) {
+      $('btn-whirl').firstChild.textContent = a.icon;
+      $('btn-whirl').title = `${a.name} (K)`;
+      document.querySelector('#hotbar .slot[data-key="whirl"] .glyph').textContent = a.icon;
+    }
+    if (b) {
+      $('btn-slam').firstChild.textContent = b.icon;
+      $('btn-slam').title = `${b.name} (L)`;
+      document.querySelector('#hotbar .slot[data-key="slam"] .glyph').textContent = b.icon;
+    }
+  }
+
+  setStageTag(current, total, name) {
+    $('stage-tag').textContent = `第 ${current}/${total} 關 · ${name}`;
   }
 
   setWave(n) {
