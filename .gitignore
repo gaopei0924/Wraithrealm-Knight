@@ -1,0 +1,7 @@
+node_modules/
+dist/
+.claude/
+# downloaded CC0 assets + generated manifest (rebuilt by npm run assets:ensure)
+public/assets/
+.DS_Store
+.gstack/

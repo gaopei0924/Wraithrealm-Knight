@@ -1,0 +1,21 @@
+{
+  "name": "brawl-dungeon",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "npm run assets:ensure && vite",
+    "build": "npm run assets:ensure && vite build",
+    "preview": "vite preview",
+    "assets:ensure": "node scripts/ensure-assets.mjs",
+    "assets:download": "node scripts/download-assets.mjs",
+    "assets:measure": "node scripts/measure-tiles.mjs"
+  },
+  "dependencies": {
+    "@dimforge/rapier3d-compat": "^0.14.0",
+    "three": "^0.169.0"
+  },
+  "devDependencies": {
+    "vite": "^5.4.0"
+  }
+}

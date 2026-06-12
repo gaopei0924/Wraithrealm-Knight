@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="theme-color" content="#050403" />
+  <title>亡域騎士 Wraithrealm Knight</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23050403'/%3E%3Ctext y='25' x='5' font-size='22'%3E%E2%9A%94%EF%B8%8F%3C/text%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="/src/ui/style.css" />
+</head>
+<body>
+  <canvas id="game"></canvas>
+  <div id="vignette"></div>
+
+  <div id="hud" class="hidden">
+    <!-- top left: portrait + bars -->
+    <div id="status-panel">
+      <div id="portrait-ring">
+        <canvas id="portrait" width="96" height="96"></canvas>
+        <div id="level-badge">1</div>
+      </div>
+      <div id="bars">
+        <div class="bar hp"><div class="fill" id="hp-fill"></div><span id="hp-text">100/100</span></div>
+        <div class="bar mp"><div class="fill" id="mp-fill"></div><span id="mp-text">100/100</span></div>
+      </div>
+    </div>
+
+    <!-- top center: wave banner -->
+    <div id="wave-banner"><span class="rule"></span><span id="wave-text">WAVE 1</span><span class="rule"></span></div>
+
+    <!-- top right: kills, minimap, objective -->
+    <div id="top-right">
+      <div id="kills">擊殺 <span id="kill-count">0</span></div>
+      <canvas id="minimap" width="150" height="150"></canvas>
+      <div id="objective">
+        <div class="objective-title">目標</div>
+        <div class="objective-line">◆ <span id="objective-text">消滅所有敵人</span></div>
+      </div>
+    </div>
+
+    <!-- bottom center: hotbar + exp -->
+    <div id="bottom-center">
+      <div id="hotbar">
+        <div class="slot" data-key="attack"><span class="glyph">⚔</span><kbd>J</kbd></div>
+        <div class="slot" data-key="whirl"><span class="glyph">🌀</span><kbd>K</kbd><div class="cd" id="cd-whirl-bar"></div></div>
+        <div class="slot" data-key="slam"><span class="glyph">🛡</span><kbd>L</kbd><div class="cd" id="cd-slam-bar"></div></div>
+        <div class="slot" data-key="roll"><span class="glyph">💨</span><kbd>SPC</kbd><div class="cd" id="cd-roll-bar"></div></div>
+        <div class="slot potion" data-key="potion"><span class="glyph">🧪</span><kbd>Q</kbd><div class="count" id="potion-count">3</div></div>
+      </div>
+      <div id="exp-bar"><div class="fill" id="exp-fill"></div><span id="exp-text">EXP 0%</span></div>
+    </div>
+
+    <!-- bottom right: action buttons -->
+    <div id="action-cluster">
+      <button class="action-btn small" id="btn-whirl" title="旋風斬 (K)">🌀</button>
+      <button class="action-btn big" id="btn-attack" title="攻擊 (J / 左鍵)">⚔</button>
+      <button class="action-btn small lower" id="btn-slam" title="盾擊 (L)">🛡</button>
+      <button class="action-btn small lowest" id="btn-roll" title="翻滾 (Space / 右鍵)">💨</button>
+      <button class="action-btn small potion-btn touch-only" id="btn-potion" title="藥水 (Q)">🧪<span id="btn-potion-count">3</span></button>
+    </div>
+
+    <!-- bottom left: floating joystick (repositions to touch point) -->
+    <div id="joystick"><div id="joystick-knob"></div></div>
+
+    <!-- fullscreen toggle (top, between bars and wave banner) -->
+    <button id="fullscreen-btn" title="全螢幕">⛶</button>
+  </div>
+
+  <!-- left-half touch surface that drives the joystick (mobile only) -->
+  <div id="touch-move-zone"></div>
+
+  <!-- floating layers -->
+  <div id="damage-layer"></div>
+  <div id="announce"></div>
+
+  <!-- level up overlay -->
+  <div id="upgrade-overlay" class="overlay hidden">
+    <div class="overlay-title">等級提升</div>
+    <div class="overlay-sub">選擇一項強化</div>
+    <div id="upgrade-cards"></div>
+  </div>
+
+  <!-- death / victory overlay -->
+  <div id="end-overlay" class="overlay hidden">
+    <div class="overlay-title" id="end-title">你死了</div>
+    <div class="overlay-sub" id="end-sub"></div>
+    <button id="restart-btn">再戰一場</button>
+  </div>
+
+  <!-- loading screen -->
+  <div id="loading">
+    <div class="overlay-title">亡域騎士</div>
+    <div class="overlay-sub" style="margin-top:-6px">WRAITHREALM KNIGHT</div>
+    <div id="loading-bar"><div id="loading-fill"></div></div>
+    <div id="loading-text">喚醒亡者中…</div>
+    <button id="start-gate" class="hidden">▶ 進入地城</button>
+    <div id="loading-hint" class="desktop-only">WASD 移動 · J/左鍵 攻擊（三連擊） · Space/右鍵 翻滾（無敵幀） · K 旋風斬 · L 盾擊 · Q 藥水</div>
+    <div id="loading-hint-mobile" class="touch-only">左側拖曳 移動 · 右側按鍵 攻擊/技能/翻滾 · 建議橫向全螢幕</div>
+  </div>
+
+  <!-- rotate-to-landscape prompt (mobile portrait only) -->
+  <div id="rotate-prompt" class="hidden">
+    <div class="rotate-icon">📱↻</div>
+    <div class="overlay-sub">請將裝置轉為橫向</div>
+  </div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
