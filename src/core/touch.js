@@ -22,9 +22,9 @@ export class TouchControls {
     window.addEventListener('pointerup', (e) => this.onUp(e));
     window.addEventListener('pointercancel', (e) => this.onUp(e));
 
+    // Skill buttons live in the dynamic #skill-bar (wired by Hud.setSkillBar).
+    // Here we only wire the fixed core actions.
     this.wireHoldButton('btn-attack', () => this.input.triggerAttack(), 230);
-    this.wireHoldButton('btn-whirl', () => this.input.triggerKey('KeyK'), 9999);
-    this.wireHoldButton('btn-slam', () => this.input.triggerKey('KeyL'), 9999);
     this.wireHoldButton('btn-roll', () => this.input.triggerRoll(), 9999);
     this.wireHoldButton('btn-potion', () => this.input.triggerKey('KeyQ'), 9999);
   }

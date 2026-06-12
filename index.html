@@ -42,25 +42,17 @@
       </div>
     </div>
 
-    <!-- bottom center: hotbar + exp -->
+    <!-- bottom center: dynamic skill bar + exp -->
     <div id="bottom-center">
-      <div id="hotbar">
-        <div class="slot" data-key="attack"><span class="glyph">⚔</span><kbd>J</kbd></div>
-        <div class="slot" data-key="whirl"><span class="glyph">🌀</span><kbd>K</kbd><div class="cd" id="cd-whirl-bar"></div></div>
-        <div class="slot" data-key="slam"><span class="glyph">🛡</span><kbd>L</kbd><div class="cd" id="cd-slam-bar"></div></div>
-        <div class="slot" data-key="roll"><span class="glyph">💨</span><kbd>SPC</kbd><div class="cd" id="cd-roll-bar"></div></div>
-        <div class="slot potion" data-key="potion"><span class="glyph">🧪</span><kbd>Q</kbd><div class="count" id="potion-count">3</div></div>
-      </div>
+      <div id="skill-bar"></div>
       <div id="exp-bar"><div class="fill" id="exp-fill"></div><span id="exp-text">EXP 0%</span></div>
     </div>
 
-    <!-- bottom right: action buttons -->
+    <!-- bottom right: core action buttons (thumb cluster) -->
     <div id="action-cluster">
-      <button class="action-btn small" id="btn-whirl" title="旋風斬 (K)">🌀</button>
-      <button class="action-btn big" id="btn-attack" title="攻擊 (J / 左鍵)">⚔</button>
-      <button class="action-btn small lower" id="btn-slam" title="盾擊 (L)">🛡</button>
-      <button class="action-btn small lowest" id="btn-roll" title="翻滾 (Space / 右鍵)">💨</button>
-      <button class="action-btn small potion-btn touch-only" id="btn-potion" title="藥水 (Q)">🧪<span id="btn-potion-count">3</span></button>
+      <button class="action-btn big" id="btn-attack" title="攻擊 (J / 左鍵)"><span class="ico">⚔</span></button>
+      <button class="action-btn small lower" id="btn-roll" title="翻滾 (Space / 右鍵)"><span class="ico">💨</span><span class="cool" id="cool-roll"></span></button>
+      <button class="action-btn small lowest potion-btn" id="btn-potion" title="藥水 (Q)"><span class="ico">🧪</span><span id="btn-potion-count">3</span></button>
     </div>
 
     <!-- bottom left: floating joystick (repositions to touch point) -->
@@ -84,6 +76,13 @@
     <div id="upgrade-cards"></div>
   </div>
 
+  <!-- skill point overlay (every 5 levels) -->
+  <div id="skill-overlay" class="overlay hidden">
+    <div class="overlay-title">技能點</div>
+    <div class="overlay-sub">獲得一個技能欄位 · 選擇新技能</div>
+    <div id="skill-cards"></div>
+  </div>
+
   <!-- death / victory overlay -->
   <div id="end-overlay" class="overlay hidden">
     <div class="overlay-title" id="end-title">你死了</div>
@@ -105,7 +104,7 @@
         <div id="difficulty-row" class="setup-row"></div>
       </div>
       <div class="setup-section">
-        <div class="setup-label">選擇兩個技能 <span id="skill-pick-count">(0/2)</span></div>
+        <div class="setup-label">選擇三個技能 <span id="skill-pick-count">(0/3)</span></div>
         <div id="skill-grid" class="setup-row"></div>
       </div>
       <button id="start-gate" disabled>▶ 進入地城</button>

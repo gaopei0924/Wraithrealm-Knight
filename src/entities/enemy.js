@@ -49,6 +49,7 @@ export class Enemy {
     this.removeAt = Infinity;
     this.slowUntil = 0;
     this.slowFactor = 1;
+    this.dot = null; // { dps, until, last } damage-over-time, applied by main
 
     const spawnAnim = this.char.has('Spawn_Ground_Skeletons') ? 'Spawn_Ground_Skeletons' : 'Spawn_Ground';
     this.spawnDuration = Math.min(1.2, this.char.clipDuration(spawnAnim) / 1.4);
@@ -122,6 +123,11 @@ export class Enemy {
   applySlow(factor, duration) {
     this.slowFactor = factor;
     this.slowUntil = performance.now() + duration * 1000;
+  }
+
+  applyDot(dps, duration) {
+    const now = performance.now();
+    this.dot = { dps, until: now + duration * 1000, last: now };
   }
 
   updateChase(dt, dist, yaw, toPlayer, playerAlive) {

@@ -1,35 +1,19 @@
 // DOM HUD: bars, wave banner, kills, minimap, cooldowns, damage numbers,
 // upgrade cards, setup + end screens. All game→HUD flow goes through this class.
-import { SKILL_LIST, DEFAULT_LOADOUT } from '../combat/skills.js';
+import { SKILL_LIST, DEFAULT_LOADOUT, SKILL_KEYS, SKILL_KEY_LABELS, STARTING_SLOTS } from '../combat/skills.js';
 
 const $ = (id) => document.getElementById(id);
 
 export class Hud {
   constructor(engine, input) {
     this.engine = engine;
+    this.input = input;
     this.root = $('hud');
     this.damageLayer = $('damage-layer');
     this.minimapCtx = $('minimap').getContext('2d');
-
-    // The right-side action buttons are wired by TouchControls (hold-to-repeat,
-    // works for both mouse and touch). Here we only wire the bottom hotbar
-    // slots, which mirror the same inputs for desktop players.
-    const slotInput = {
-      attack: () => input.triggerAttack(),
-      whirl: () => input.triggerKey('KeyK'),
-      slam: () => input.triggerKey('KeyL'),
-      roll: () => input.triggerRoll(),
-      potion: () => input.triggerKey('KeyQ'),
-    };
-    for (const slot of document.querySelectorAll('#hotbar .slot')) {
-      const key = slot.dataset.key;
-      if (slotInput[key]) {
-        slot.addEventListener('pointerdown', (e) => {
-          e.preventDefault();
-          slotInput[key]();
-        });
-      }
-    }
+    this.loadout = [];
+    // Core action buttons are wired by TouchControls; the dynamic skill bar is
+    // wired in setSkillBar(). Nothing static to wire here.
   }
 
   show() {
@@ -71,10 +55,10 @@ export class Hud {
       diffRow.appendChild(card);
     }
 
-    // skill cards (pick exactly 2)
+    // skill cards (pick exactly STARTING_SLOTS)
     const refresh = () => {
-      pickLabel.textContent = `(${chosenSkills.length}/2)`;
-      startBtn.disabled = chosenSkills.length !== 2;
+      pickLabel.textContent = `(${chosenSkills.length}/${STARTING_SLOTS})`;
+      startBtn.disabled = chosenSkills.length !== STARTING_SLOTS;
       for (const c of skillGrid.children) {
         c.classList.toggle('selected', chosenSkills.includes(c.dataset.id));
       }
@@ -88,7 +72,7 @@ export class Hud {
       card.addEventListener('click', () => {
         const i = chosenSkills.indexOf(skill.id);
         if (i >= 0) chosenSkills.splice(i, 1);
-        else if (chosenSkills.length < 2) chosenSkills.push(skill.id);
+        else if (chosenSkills.length < STARTING_SLOTS) chosenSkills.push(skill.id);
         refresh();
       });
       skillGrid.appendChild(card);
@@ -97,7 +81,7 @@ export class Hud {
 
     $('setup').classList.remove('hidden');
     startBtn.addEventListener('click', () => {
-      if (chosenSkills.length !== 2) return;
+      if (chosenSkills.length !== STARTING_SLOTS) return;
       onConfirm(difficulties[chosenDiff], chosenSkills);
     }, { once: true });
   }
@@ -109,41 +93,49 @@ export class Hud {
     $('mp-text').textContent = `${Math.floor(player.mp)}/${player.stats.maxMp}`;
     $('level-badge').textContent = player.level;
     $('kill-count').textContent = director.kills;
-    $('potion-count').textContent = player.potions;
     $('btn-potion-count').textContent = player.potions;
     const expPct = Math.floor((player.xp / player.xpToNext) * 100);
     $('exp-fill').style.width = `${expPct}%`;
     $('exp-text').textContent = `EXP ${expPct}%`;
 
-    // Two skill slots, cooldown ratios from the equipped loadout.
-    const s0 = player.loadout[0];
-    const s1 = player.loadout[1];
-    if (s0) this.setCooldown('cd-whirl-bar', player.skillCd[0], s0.cooldown);
-    if (s1) this.setCooldown('cd-slam-bar', player.skillCd[1], s1.cooldown);
-    this.setCooldown('cd-roll-bar', player.rollCooldownLeft, player.stats.rollCooldown);
-    // Dim skill buttons when on cooldown or short on MP (mobile feedback).
-    $('btn-whirl').classList.toggle('insufficient', s0 && (player.skillCd[0] > 0 || player.mp < s0.mp));
-    $('btn-slam').classList.toggle('insufficient', s1 && (player.skillCd[1] > 0 || player.mp < s1.mp));
+    // Dynamic skill bar cooldowns + MP dimming.
+    for (let i = 0; i < this.loadout.length; i++) {
+      const skill = this.loadout[i];
+      const cool = $(`skill-cool-${i}`);
+      if (cool) cool.style.transform = `scaleY(${Math.max(0, Math.min(1, player.skillCd[i] / skill.cooldown))})`;
+      const slot = $(`skill-slot-${i}`);
+      if (slot) slot.classList.toggle('insufficient', player.skillCd[i] > 0 || player.mp < skill.mp);
+    }
+    this.setCooldown('cool-roll', player.rollCooldownLeft, player.stats.rollCooldown);
     $('btn-roll').classList.toggle('insufficient', player.rollCooldownLeft > 0);
   }
 
   setCooldown(id, left, total) {
-    $(id).style.transform = `scaleY(${Math.max(0, Math.min(1, left / total))})`;
+    const el = $(id);
+    if (el) el.style.transform = `scaleY(${Math.max(0, Math.min(1, left / total))})`;
   }
 
-  // Reflect the equipped loadout on the two skill buttons + hotbar slots.
-  setSkillButtons(loadout) {
-    const [a, b] = loadout;
-    if (a) {
-      $('btn-whirl').firstChild.textContent = a.icon;
-      $('btn-whirl').title = `${a.name} (K)`;
-      document.querySelector('#hotbar .slot[data-key="whirl"] .glyph').textContent = a.icon;
-    }
-    if (b) {
-      $('btn-slam').firstChild.textContent = b.icon;
-      $('btn-slam').title = `${b.name} (L)`;
-      document.querySelector('#hotbar .slot[data-key="slam"] .glyph').textContent = b.icon;
-    }
+  // Rebuild the dynamic skill bar from the equipped loadout. Each button mirrors
+  // its keyboard key and fires the same input. Called on run start + each new slot.
+  setSkillBar(loadout) {
+    this.loadout = loadout;
+    const bar = $('skill-bar');
+    bar.innerHTML = '';
+    loadout.forEach((skill, i) => {
+      const btn = document.createElement('button');
+      btn.className = 'skill-slot';
+      btn.id = `skill-slot-${i}`;
+      btn.title = `${skill.name} (${SKILL_KEY_LABELS[i] ?? ''})`;
+      btn.innerHTML =
+        `<span class="ico">${skill.icon}</span>` +
+        `<span class="key">${SKILL_KEY_LABELS[i] ?? ''}</span>` +
+        `<span class="cool" id="skill-cool-${i}"></span>`;
+      btn.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        this.input.triggerKey(SKILL_KEYS[i]);
+      });
+      bar.appendChild(btn);
+    });
   }
 
   setStageTag(current, total, name) {
@@ -232,6 +224,24 @@ export class Hud {
       card.addEventListener('click', () => {
         overlay.classList.add('hidden');
         onPick(choice);
+      });
+      cardsEl.appendChild(card);
+    }
+    overlay.classList.remove('hidden');
+  }
+
+  // Skill-point choice (every 5 levels): pick a new skill to add a loadout slot.
+  showSkillChoice(skills, onPick) {
+    const overlay = $('skill-overlay');
+    const cardsEl = $('skill-cards');
+    cardsEl.innerHTML = '';
+    for (const skill of skills) {
+      const card = document.createElement('div');
+      card.className = 'upgrade-card';
+      card.innerHTML = `<div class="icon">${skill.icon}</div><div class="name">${skill.name}</div><div class="desc">${skill.desc}</div>`;
+      card.addEventListener('click', () => {
+        overlay.classList.add('hidden');
+        onPick(skill);
       });
       cardsEl.appendChild(card);
     }

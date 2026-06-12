@@ -134,6 +134,29 @@ body.touch .touch-only { display: block; }
   position: absolute; inset: 0; background: rgba(0,0,0,0.75);
   transform-origin: bottom; transform: scaleY(0); pointer-events: none;
 }
+/* ---------- dynamic skill bar ---------- */
+#skill-bar { display: flex; gap: 7px; justify-content: center; flex-wrap: wrap; max-width: 92vw; }
+.skill-slot {
+  position: relative; width: 54px; height: 54px; padding: 0;
+  background: linear-gradient(#241a10, #0d0a06);
+  border: 1px solid #4a3a22; border-radius: 5px;
+  box-shadow: inset 0 0 10px #000, 0 2px 6px rgba(0,0,0,0.8);
+  cursor: pointer; overflow: hidden; pointer-events: auto;
+  display: flex; align-items: center; justify-content: center;
+}
+.skill-slot:hover { border-color: var(--gold); }
+.skill-slot .ico { font-size: 25px; filter: sepia(0.3) saturate(1.3); }
+.skill-slot .key {
+  position: absolute; top: 2px; left: 4px; font-size: 10px; color: #b59a64;
+  font-family: inherit; text-shadow: 0 1px 2px #000;
+}
+.skill-slot.insufficient { opacity: 0.5; }
+.skill-slot .cool, .action-btn .cool {
+  position: absolute; inset: 0; background: rgba(4,3,2,0.72);
+  transform-origin: bottom; transform: scaleY(0); pointer-events: none;
+}
+.action-btn .cool { border-radius: 50%; }
+
 #exp-bar {
   position: relative; width: 460px; height: 13px;
   background: rgba(8,6,4,0.9); border: 1px solid #4a3a22;
@@ -168,16 +191,10 @@ body.touch .touch-only { display: block; }
 .action-btn.small { width: 60px; height: 60px; right: 124px; bottom: 130px; font-size: 26px; }
 .action-btn.small.lower { right: 138px; bottom: 56px; }
 .action-btn.small.lowest { right: 104px; bottom: -6px; }
-.action-btn.potion-btn { width: 54px; height: 54px; right: 150px; bottom: 192px; font-size: 22px; }
 .action-btn.potion-btn #btn-potion-count {
-  position: absolute; bottom: 0; right: 4px; font-size: 13px; color: #fff;
+  position: absolute; bottom: 1px; right: 5px; font-size: 13px; color: #fff;
   text-shadow: 0 1px 2px #000;
 }
-
-/* On touch: drop the keybind hotbar (its slots collide with the joystick
-   zone and duplicate the action cluster); keep the EXP bar. */
-body.touch #hotbar { display: none; }
-body.touch #bottom-center { bottom: 8px; }
 
 /* ---------- bottom left: joystick ---------- */
 /* Desktop: a static decorative ring. Mobile: repositions to the touch point. */
@@ -242,6 +259,7 @@ body.touch #touch-move-zone { pointer-events: auto; }
 .dmg.crit { color: #ff5533; font-size: 30px; }
 .dmg.player-hit { color: #ff8888; }
 .dmg.heal { color: #7dde7d; }
+.dmg.dot { color: #9ade5a; font-size: 18px; }
 @keyframes dmg-float {
   0% { opacity: 0; margin-top: 0; transform: translate(-50%, -50%) scale(0.6); }
   15% { opacity: 1; transform: translate(-50%, -50%) scale(1.15); }

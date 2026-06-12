@@ -13,6 +13,7 @@ import { Player } from './entities/player.js';
 import { WaveDirector } from './entities/spawner.js';
 import { rollUpgradeChoices } from './combat/upgrades.js';
 import { DIFFICULTIES, enemyMods, buildWavePlans } from './combat/difficulty.js';
+import { SLOTS_PER_MILESTONE } from './combat/skills.js';
 import { Hud } from './ui/hud.js';
 import { TouchControls } from './core/touch.js';
 import {
@@ -98,7 +99,7 @@ class Game {
     this.started = true;
     this.difficulty = difficulty;
     this.player.setLoadout(loadoutIds);
-    this.hud.setSkillButtons(this.player.loadout);
+    this.hud.setSkillBar(this.player.loadout);
 
     this.sfx.ensure();
     if (this.sfx.ctx?.state === 'suspended') this.sfx.ctx.resume();
@@ -197,7 +198,7 @@ class Game {
     const player = this.player;
     player.events.onSwing = (swing) => this.resolveArcHit(swing, 0xffc878);
     player.events.onSkill = (ctx) => this.resolveSkill(ctx);
-    player.events.onLevelUp = () => this.levelUp();
+    player.events.onLevelUp = (lvl) => this.levelUp(lvl);
     player.events.onDeath = () => this.defeat();
   }
 
@@ -219,9 +220,13 @@ class Game {
       case 'projectile':
         this.fx.firePlayerBolt(origin, facing, fx);
         break;
+      case 'chain':
+        this.resolveChain(origin, fx, damageMult);
+        break;
       case 'buff':
-        this.fx.ringBurst(origin, 2.4, fx.color);
-        this.hud.announce('狂暴', '');
+        this.fx.ringBurst(origin, 2.6, fx.color);
+        if (fx.invuln) this.hud.announce('聖盾庇護', '');
+        else if (fx.damageMult) this.hud.announce('狂暴', '');
         break;
     }
   }
@@ -236,10 +241,37 @@ class Game {
         const dmg = damage * (crit ? this.player.stats.critMult : 1);
         this.applyDamage(enemy, dmg, origin, fx.knockback ?? 5, crit);
         if (fx.slow) enemy.applySlow(fx.slow.factor, fx.slow.duration);
+        if (fx.dot) enemy.applyDot(fx.dot.dps, fx.dot.duration);
         hit = true;
       }
     }
     if (hit) this.sfx.hit();
+  }
+
+  // Lightning that hops between the nearest enemies, damaging each.
+  resolveChain(origin, fx, damageMult) {
+    const remaining = [...this.director.aliveEnemies];
+    const points = [origin];
+    let from = origin;
+    let struck = false;
+    for (let jump = 0; jump < fx.jumps && remaining.length; jump++) {
+      let best = -1;
+      let bestDist = fx.range * fx.range;
+      for (let i = 0; i < remaining.length; i++) {
+        const d = remaining[i].position.distanceToSquared(from);
+        if (d < bestDist) { bestDist = d; best = i; }
+      }
+      if (best < 0) break;
+      const target = remaining.splice(best, 1)[0];
+      points.push(target.position.clone());
+      const crit = Math.random() < this.player.stats.critChance;
+      const dmg = fx.damage * damageMult * (crit ? this.player.stats.critMult : 1);
+      this.applyDamage(target, dmg, from, 3, crit);
+      from = target.position.clone();
+      struck = true;
+    }
+    this.fx.chainLightning(points, fx.color);
+    if (struck) { this.sfx.hit(); this.engine.addShake(0.15); }
   }
 
   resolveArcHit(swing, color) {
@@ -268,11 +300,11 @@ class Game {
     }
   }
 
-  applyDamage(enemy, damage, fromPos, knockback, crit = false) {
+  applyDamage(enemy, damage, fromPos, knockback, crit = false, kind = '') {
     const dealt = enemy.takeDamage(damage, fromPos, knockback);
     if (dealt <= 0) return;
-    this.hud.damageNumber(enemy.position, damage, crit ? 'crit' : '');
-    this.fx.hitSpark(enemy.position);
+    this.hud.damageNumber(enemy.position, damage, kind || (crit ? 'crit' : ''));
+    if (kind !== 'dot') this.fx.hitSpark(enemy.position);
     if (this.player.lifesteal > 0) {
       this.player.heal(damage * this.player.lifesteal);
     }
@@ -285,13 +317,33 @@ class Game {
     }
   }
 
-  levelUp() {
+  levelUp(level) {
     this.sfx.levelUp();
     this.paused = true;
-    this.hud.showUpgradeChoices(rollUpgradeChoices(3), (choice) => {
-      choice.apply(this.player);
-      this.paused = false;
-    });
+    // Every 5 levels grant a skill point: pick a new skill (new loadout slot).
+    const pool = this.player.unequippedSkills();
+    if (level % SLOTS_PER_MILESTONE === 0 && pool.length > 0) {
+      const choices = this.pickRandom(pool, Math.min(3, pool.length));
+      this.hud.showSkillChoice(choices, (skill) => {
+        this.player.addSkill(skill.id);
+        this.hud.setSkillBar(this.player.loadout);
+        this.paused = false;
+      });
+    } else {
+      this.hud.showUpgradeChoices(rollUpgradeChoices(3), (choice) => {
+        choice.apply(this.player);
+        this.paused = false;
+      });
+    }
+  }
+
+  pickRandom(arr, n) {
+    const pool = [...arr];
+    const out = [];
+    while (out.length < n && pool.length) {
+      out.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0]);
+    }
+    return out;
   }
 
   defeat() {
@@ -330,6 +382,17 @@ class Game {
     player.syncFromPhysics();
     for (const enemy of director.enemies) {
       if (!enemy.dead) enemy.syncFromPhysics();
+    }
+
+    // Damage-over-time (poison): apply in ~0.4s chunks so kills route normally.
+    const now = performance.now();
+    for (const enemy of director.aliveEnemies) {
+      const dot = enemy.dot;
+      if (!dot || now - dot.last < 400) continue;
+      const chunk = dot.dps * ((now - dot.last) / 1000);
+      dot.last = now;
+      if (now >= dot.until) enemy.dot = null;
+      this.applyDamage(enemy, chunk, enemy.position.clone().setZ(enemy.position.z - 0.5), 0, false, 'dot');
     }
 
     fx.update(dt);

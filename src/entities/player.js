@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { Character } from './character.js';
-import { SKILLS, DEFAULT_LOADOUT } from '../combat/skills.js';
+import { SKILLS, DEFAULT_LOADOUT, SKILL_KEYS } from '../combat/skills.js';
 
 const HIDDEN_MESHES = ['1H_Sword_Offhand', 'Badge_Shield', 'Rectangle_Shield', 'Spike_Shield', '2H_Sword'];
 
@@ -84,6 +84,18 @@ export class Player {
     this.skillCd = this.loadout.map(() => 0);
   }
 
+  addSkill(id) {
+    if (!SKILLS[id] || this.loadout.some((s) => s.id === id)) return;
+    this.loadout = [...this.loadout, SKILLS[id]];
+    this.skillCd = [...this.skillCd, 0];
+  }
+
+  // Skills the player hasn't equipped yet (for the +1-slot choice).
+  unequippedSkills() {
+    const have = new Set(this.loadout.map((s) => s.id));
+    return Object.values(SKILLS).filter((s) => !have.has(s.id));
+  }
+
   syncFromPhysics() {
     const pos = this.actor.body.translation();
     this.char.setPosition(pos.x, pos.z);
@@ -142,8 +154,9 @@ export class Player {
       this.startAttack(0);
       return true;
     }
-    if (input.wasPressed('KeyK') && this.useSkill(0)) return true;
-    if (input.wasPressed('KeyL') && this.useSkill(1)) return true;
+    for (let i = 0; i < this.loadout.length; i++) {
+      if (input.wasPressed(SKILL_KEYS[i]) && this.useSkill(i)) return true;
+    }
     if (input.wasPressed('KeyQ')) this.drinkPotion();
     return false;
   }
@@ -274,10 +287,12 @@ export class Player {
       this.skillHitDone = true;
       if (skill.effect.type === 'buff') {
         this.buff = {
-          damageMult: skill.effect.damageMult,
-          lifesteal: skill.effect.lifesteal,
+          damageMult: skill.effect.damageMult ?? 1,
+          lifesteal: skill.effect.lifesteal ?? 0,
+          invuln: skill.effect.invuln ?? false,
           until: performance.now() + skill.effect.duration * 1000,
         };
+        if (skill.effect.healInstant) this.heal(skill.effect.healInstant);
       }
       this.events.onSkill?.({
         skill,
@@ -297,7 +312,10 @@ export class Player {
   }
 
   takeDamage(amount) {
-    if (!this.alive || this.invincible || this.state === 'roll' || this.hitInvulnLeft > 0) {
+    if (
+      !this.alive || this.invincible || this.state === 'roll' ||
+      this.hitInvulnLeft > 0 || this.buff?.invuln
+    ) {
       return false;
     }
     this.hp -= amount;

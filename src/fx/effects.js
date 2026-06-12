@@ -197,6 +197,33 @@ export class Effects {
     this.items = [];
   }
 
+  // Lightning polyline through a list of world points (chain lightning).
+  chainLightning(points, color = 0x9fe6ff) {
+    if (points.length < 2) return;
+    const verts = [];
+    for (const p of points) verts.push(p.x, 1.1, p.z);
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
+    const mat = new THREE.LineBasicMaterial({
+      color, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false,
+    });
+    const line = new THREE.Line(geo, mat);
+    this.scene.add(line);
+    // a glow node at each struck point
+    for (const p of points.slice(1)) {
+      const glow = new THREE.PointLight(color, 8, 4);
+      glow.position.set(p.x, 1.4, p.z);
+      this.scene.add(glow);
+      let gt = 0;
+      this.items.push({ mesh: glow, update: (dt) => { gt += dt; glow.intensity = Math.max(0, 8 - gt * 40); return gt < 0.2; } });
+    }
+    let t = 0;
+    this.items.push({
+      mesh: line,
+      update: (dt) => { t += dt; mat.opacity = Math.max(0, 1 - t * 5); return t < 0.2; },
+    });
+  }
+
   update(dt) {
     this.items = this.items.filter((item) => {
       const alive = item.update(dt);
