@@ -42,13 +42,33 @@ export function suppressBrowserGestures() {
   );
 }
 
+export function isFullscreen() {
+  return !!(document.fullscreenElement || document.webkitFullscreenElement);
+}
+
+// Requests fullscreen on the page root. Must be called from within a user
+// gesture (e.g. the start-button click) or the browser will reject it.
+// Returns true if the request resolved without throwing.
 export async function enterFullscreen() {
+  if (isFullscreen()) return true;
   const el = document.documentElement;
   try {
     if (el.requestFullscreen) await el.requestFullscreen({ navigationUI: 'hide' });
     else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+    else return false;
+    return true;
   } catch {
     /* user denied or unsupported — game still works windowed */
+    return false;
+  }
+}
+
+export function exitFullscreen() {
+  try {
+    if (document.exitFullscreen) document.exitFullscreen();
+    else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+  } catch {
+    /* ignore */
   }
 }
 

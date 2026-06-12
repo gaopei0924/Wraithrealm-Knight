@@ -19,6 +19,8 @@ import {
   isTouchDevice,
   suppressBrowserGestures,
   enterFullscreen,
+  exitFullscreen,
+  isFullscreen,
   lockLandscape,
   watchOrientation,
 } from './core/mobile.js';
@@ -44,10 +46,20 @@ class Game {
       suppressBrowserGestures();
       watchOrientation(document.getElementById('rotate-prompt'));
     }
-    document.getElementById('fullscreen-btn').addEventListener('click', () => {
-      if (document.fullscreenElement) document.exitFullscreen?.();
+    const fsBtn = document.getElementById('fullscreen-btn');
+    fsBtn.addEventListener('click', () => {
+      if (isFullscreen()) exitFullscreen();
       else enterFullscreen();
     });
+    // Keep the toggle icon in sync and re-fit the canvas when fullscreen flips.
+    const onFsChange = () => {
+      const full = isFullscreen();
+      fsBtn.textContent = full ? '🗕' : '⛶';
+      fsBtn.classList.toggle('nudge', !full && this.started);
+      this.engine.onResize();
+    };
+    document.addEventListener('fullscreenchange', onFsChange);
+    document.addEventListener('webkitfullscreenchange', onFsChange);
 
     this.hud.setLoading(0.05, '召喚物理之力…');
     this.physics = await Physics.create();
@@ -90,10 +102,14 @@ class Game {
 
     this.sfx.ensure();
     if (this.sfx.ctx?.state === 'suspended') this.sfx.ctx.resume();
-    if (isTouchDevice()) {
-      await enterFullscreen();
-      await lockLandscape();
-    }
+
+    // Request fullscreen on EVERY platform while the start-button gesture is
+    // still active, so the browser address/tab bar can't cover the play area.
+    // (Desktop Chrome needs this just as much as mobile.) If the user declines
+    // or the browser blocks it, the ⛶ button stays available.
+    const wentFull = await enterFullscreen();
+    if (isTouchDevice()) await lockLandscape();
+    if (!wentFull) document.getElementById('fullscreen-btn').classList.add('nudge');
 
     this.hud.hideLoading();
     this.hud.show();
