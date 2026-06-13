@@ -1,6 +1,7 @@
 // DOM HUD: bars, wave banner, kills, minimap, cooldowns, damage numbers,
 // upgrade cards, setup + end screens. All game→HUD flow goes through this class.
 import { SKILL_LIST, DEFAULT_LOADOUT, SKILL_KEYS, SKILL_KEY_LABELS, STARTING_SLOTS } from '../combat/skills.js';
+import { icon } from './icons.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -18,6 +19,19 @@ export class Hud {
 
   show() {
     this.root.classList.remove('hidden');
+  }
+
+  // Paint the fixed (non-dynamic) icons once at boot.
+  paintStaticIcons() {
+    const set = (sel, name) => {
+      const el = document.querySelector(sel);
+      if (el) el.innerHTML = icon(name);
+    };
+    set('#btn-attack .ico', 'attack');
+    set('#btn-roll .ico', 'roll');
+    set('#btn-potion .ico', 'potion');
+    set('#fullscreen-btn', 'expand');
+    set('#rotate-icon', 'rotate');
   }
 
   setLoading(progress, text) {
@@ -68,7 +82,7 @@ export class Hud {
       const card = document.createElement('button');
       card.className = 'setup-card skill';
       card.dataset.id = skill.id;
-      card.innerHTML = `<div class="card-icon">${skill.icon}</div><div class="card-name">${skill.name}</div><div class="card-desc">${skill.desc}</div>`;
+      card.innerHTML = `<div class="card-icon">${icon(skill.icon)}</div><div class="card-name">${skill.name}</div><div class="card-desc">${skill.desc}</div>`;
       card.addEventListener('click', () => {
         const i = chosenSkills.indexOf(skill.id);
         if (i >= 0) chosenSkills.splice(i, 1);
@@ -127,7 +141,7 @@ export class Hud {
       btn.id = `skill-slot-${i}`;
       btn.title = `${skill.name} (${SKILL_KEY_LABELS[i] ?? ''})`;
       btn.innerHTML =
-        `<span class="ico">${skill.icon}</span>` +
+        `<span class="ico">${icon(skill.icon)}</span>` +
         `<span class="key">${SKILL_KEY_LABELS[i] ?? ''}</span>` +
         `<span class="cool" id="skill-cool-${i}"></span>`;
       btn.addEventListener('pointerdown', (e) => {
@@ -220,7 +234,7 @@ export class Hud {
     for (const choice of choices) {
       const card = document.createElement('div');
       card.className = 'upgrade-card';
-      card.innerHTML = `<div class="icon">${choice.icon}</div><div class="name">${choice.name}</div><div class="desc">${choice.desc}</div>`;
+      card.innerHTML = `<div class="icon">${icon(choice.icon)}</div><div class="name">${choice.name}</div><div class="desc">${choice.desc}</div>`;
       card.addEventListener('click', () => {
         overlay.classList.add('hidden');
         onPick(choice);
@@ -238,7 +252,7 @@ export class Hud {
     for (const skill of skills) {
       const card = document.createElement('div');
       card.className = 'upgrade-card';
-      card.innerHTML = `<div class="icon">${skill.icon}</div><div class="name">${skill.name}</div><div class="desc">${skill.desc}</div>`;
+      card.innerHTML = `<div class="icon">${icon(skill.icon)}</div><div class="name">${skill.name}</div><div class="desc">${skill.desc}</div>`;
       card.addEventListener('click', () => {
         overlay.classList.add('hidden');
         onPick(skill);

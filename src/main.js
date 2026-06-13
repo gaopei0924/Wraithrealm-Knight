@@ -15,6 +15,7 @@ import { rollUpgradeChoices } from './combat/upgrades.js';
 import { DIFFICULTIES, enemyMods, buildWavePlans } from './combat/difficulty.js';
 import { SLOTS_PER_MILESTONE } from './combat/skills.js';
 import { Hud } from './ui/hud.js';
+import { icon } from './ui/icons.js';
 import { TouchControls } from './core/touch.js';
 import {
   isTouchDevice,
@@ -55,12 +56,13 @@ class Game {
     // Keep the toggle icon in sync and re-fit the canvas when fullscreen flips.
     const onFsChange = () => {
       const full = isFullscreen();
-      fsBtn.textContent = full ? '🗕' : '⛶';
+      fsBtn.innerHTML = icon(full ? 'compress' : 'expand');
       fsBtn.classList.toggle('nudge', !full && this.started);
       this.engine.onResize();
     };
     document.addEventListener('fullscreenchange', onFsChange);
     document.addEventListener('webkitfullscreenchange', onFsChange);
+    this.hud.paintStaticIcons();
 
     this.hud.setLoading(0.05, '召喚物理之力…');
     this.physics = await Physics.create();

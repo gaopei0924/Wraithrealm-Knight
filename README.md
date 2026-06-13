@@ -97,6 +97,12 @@ npm run assets:measure    # 解析 GLB 計算每塊 tile 的包圍盒 → tile-m
   走訪 node 階層算出世界空間 AABB。地城產生器用量出來的尺寸
   （grid = 4m）動態拼接，不寫死任何 tile 大小。
 
+### UI 圖示
+
+技能、動作、升級的圖示為 [game-icons.net](https://game-icons.net) 的單色向量圖示
+（CC BY 3.0），內嵌於 `src/ui/icons.js`，以 `currentColor` 上色，統一成金色線稿風格。
+作者群包含 Lorc、Delapouite、Sbed、Skoll、Felbrigg 等。
+
 ## 架構
 
 ```
