@@ -33,6 +33,23 @@ export const CHARACTERS = {
     icon: 'bloodlust', signature: 'poison',
     stats: { maxHp: 1.0, damageMult: 1.0, moveSpeed: 1.0, critChance: 0.04, lifesteal: 0.08, mpRegen: 1.1 },
   },
+  bonelord: {
+    id: 'bonelord', name: '骸骨君主', subtitle: 'BONE SOVEREIGN', model: 'Skeleton_Warrior',
+    headNode: 'Skeleton_Warrior_Head', tint: 0x8fb0d8,
+    desc: '不死的亡域之主，血厚、附帶連鎖閃電。',
+    icon: 'chain', signature: 'chain',
+    stats: { maxHp: 1.3, damageMult: 1.05, moveSpeed: 0.96, critChance: 0.04, lifesteal: 0.05, mpRegen: 1.2 },
+  },
+  // To add a Quaternius (or any non-KayKit) CC0 rig as a hero: drop its .glb in
+  // public/assets/characters/, add an entry here, and supply `aliases` mapping the
+  // game's KayKit clip names → that rig's clip names, e.g.:
+  //   quaternius: {
+  //     id:'quaternius', name:'流浪者', model:'Quaternius_Adventurer', signature:'dash',
+  //     stats:{...},
+  //     aliases:{ Idle:'Idle', Running_A:'Run', Dodge_Forward:'Roll', Death_A:'Death',
+  //       Hit_A:'HitRecieve', '1H_Melee_Attack_Chop':'1H_Melee_Attack',
+  //       '1H_Melee_Attack_Slice_Diagonal':'1H_Melee_Attack', '1H_Melee_Attack_Slice_Horizontal':'1H_Melee_Attack' },
+  //   },
 };
 
 export const CHARACTER_LIST = Object.values(CHARACTERS);

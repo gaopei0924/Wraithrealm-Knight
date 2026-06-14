@@ -110,6 +110,13 @@
   <!-- achievement toast stack -->
   <div id="toast-layer"></div>
 
+  <!-- layout-edit bar -->
+  <div id="layout-bar" class="hidden">
+    <span>拖曳調整操作位置</span>
+    <button id="layout-reset" class="menu-btn">復位</button>
+    <button id="layout-done" class="menu-btn">完成</button>
+  </div>
+
   <!-- pause menu -->
   <div id="pause-overlay" class="overlay hidden">
     <div class="overlay-title">暫停</div>
@@ -125,6 +132,7 @@
     <label class="toggle-row"><input type="checkbox" id="toggle-music" checked /> 背景音樂</label>
     <button id="resume-btn" class="menu-btn">繼續遊戲</button>
     <button id="pause-fs-btn" class="menu-btn">切換全螢幕</button>
+    <button id="pause-layout-btn" class="menu-btn">編輯操作佈局</button>
     <button id="pause-help-btn" class="menu-btn">操作說明</button>
     <button id="pause-restart-btn" class="menu-btn">重新開始</button>
     <div id="ios-fs-hint" class="hidden">iOS 無法網頁全螢幕，請用 Safari「分享 → 加入主畫面」以全螢幕遊玩</div>

@@ -2,8 +2,12 @@ import * as THREE from 'three';
 
 // Shared skinned-character wrapper: animation mixer + crossfade state machine.
 export class Character {
-  constructor({ scene: model, animations }, worldScene, scale = 1) {
+  // `aliases` maps the KayKit clip names the game requests (Idle, Running_A,
+  // Death_A, 1H_Melee_Attack_Chop, …) to whatever this rig actually ships, so a
+  // non-KayKit rig (e.g. a Quaternius CC0 character) can be used as a hero.
+  constructor({ scene: model, animations }, worldScene, scale = 1, aliases = null) {
     this.model = model;
+    this.aliases = aliases;
     this.model.scale.setScalar(scale);
     this.root = new THREE.Group();
     this.root.add(this.model);
@@ -29,13 +33,23 @@ export class Character {
     this.flashTimeout = null;
   }
 
+  // Resolve a requested clip name through the alias map.
+  resolve(name) {
+    if (this.actions.has(name)) return name;
+    const a = this.aliases?.[name];
+    return a && this.actions.has(a) ? a : null;
+  }
+
   has(name) {
-    return this.actions.has(name);
+    return this.resolve(name) !== null;
   }
 
   play(name, { fade = 0.15, loop = true, timeScale = 1, force = false } = {}) {
-    if (this.currentName === name && !force) return this.actions.get(name);
-    const action = this.actions.get(name);
+    if (this.currentName === name && !force) return this.current;
+    let resolved = this.resolve(name);
+    // fall back to an idle so an unmapped rig never freezes in a T-pose
+    if (!resolved) resolved = this.resolve('Idle') ?? this.actions.keys().next().value;
+    const action = this.actions.get(resolved);
     if (!action) return null;
     action.reset();
     action.setLoop(loop ? THREE.LoopRepeat : THREE.LoopOnce, Infinity);
@@ -51,7 +65,8 @@ export class Character {
   }
 
   clipDuration(name) {
-    return this.actions.get(name)?.getClip().duration ?? 0;
+    const r = this.resolve(name);
+    return r ? this.actions.get(r).getClip().duration ?? 0 : 0;
   }
 
   setPosition(x, z) {

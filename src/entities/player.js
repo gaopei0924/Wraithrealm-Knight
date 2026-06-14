@@ -16,8 +16,8 @@ const IFRAME_START = 0.02;
 const IFRAME_END = 0.34;
 
 export class Player {
-  constructor(charData, scene, physics, sfx) {
-    this.char = new Character(charData, scene, 1.0);
+  constructor(charData, scene, physics, sfx, aliases = null) {
+    this.char = new Character(charData, scene, 1.0, aliases);
     this.char.model.traverse((o) => {
       if (HIDDEN_MESHES.includes(o.name)) o.visible = false;
     });
@@ -117,6 +117,7 @@ export class Player {
     this.hp = this.stats.maxHp;
     this.mp = this.stats.maxMp;
     this.character = def;
+    if (def.tint) this.char.setTint(def.tint, 0.4);
   }
 
   applyChill(factor, duration) {

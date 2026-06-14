@@ -22,6 +22,7 @@ import { ENEMY_TYPES } from './entities/enemy.js';
 import { Hud } from './ui/hud.js';
 import { icon } from './ui/icons.js';
 import { TouchControls } from './core/touch.js';
+import { LayoutEditor } from './core/layoutedit.js';
 import {
   isTouchDevice, suppressBrowserGestures, enterFullscreen, exitFullscreen,
   isFullscreen, lockLandscape, watchOrientation, fitViewport, requestFullscreenOnFirstGesture,
@@ -92,6 +93,15 @@ class Game {
     });
     this.engine.shakeEnabled = Save.shake;
 
+    // Draggable on-screen controls.
+    this.layoutEditor = new LayoutEditor();
+    document.getElementById('pause-layout-btn').addEventListener('click', () => {
+      this.togglePause(false);
+      this.layoutEditor.enter();
+    });
+    document.getElementById('layout-done').addEventListener('click', () => this.layoutEditor.exit());
+    document.getElementById('layout-reset').addEventListener('click', () => this.layoutEditor.reset());
+
     this.hud.setLoading(0.05, '召喚物理之力…');
     this.physics = await Physics.create();
     this.hud.setLoading(0.2, '丈量石磚…');
@@ -119,7 +129,7 @@ class Game {
     // Build the chosen hero now.
     const charDef = CHARACTERS[characterId] ?? CHARACTERS[DEFAULT_CHARACTER];
     const charData = await this.assets.character(charDef.model);
-    this.player = new Player(charData, this.engine.scene, this.physics, this.sfx);
+    this.player = new Player(charData, this.engine.scene, this.physics, this.sfx, charDef.aliases);
     this.player.applyCharacter(charDef);
     this.wirePlayerEvents();
     // chosen skills + the hero's signature skill (deduped, capped at 8)
@@ -142,6 +152,7 @@ class Game {
 
     this.hud.hideLoading();
     this.hud.show();
+    this.layoutEditor.apply(); // restore saved control positions
     this.runStart = performance.now();
     this.stageIndex = -1;
     await this.loadStage(0);

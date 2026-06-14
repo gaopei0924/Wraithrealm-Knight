@@ -695,3 +695,19 @@ body.portrait #wave-text { font-size: 15px; letter-spacing: 4px; }
 /* wrap choice cards so they fit narrow / portrait screens */
 #upgrade-cards, #skill-cards { flex-wrap: wrap; max-width: 94vw; }
 body.portrait .upgrade-card, body.portrait .setup-card { width: 132px; }
+
+/* ===================== draggable layout editor ===================== */
+#layout-bar {
+  position: fixed; top: 12px; left: 50%; transform: translateX(-50%);
+  z-index: 60; display: flex; align-items: center; gap: 12px;
+  background: rgba(12,9,6,0.92); border: 1px solid var(--gold); border-radius: 8px;
+  padding: 8px 14px; color: var(--gold); letter-spacing: 2px; pointer-events: auto;
+}
+#layout-bar .menu-btn { margin: 0; padding: 8px 18px; font-size: 14px; min-width: 0; }
+/* during edit, dim the world + outline draggable controls; let them receive drags */
+body.editlayout #game { filter: brightness(0.5); }
+body.editlayout .draggable {
+  outline: 2px dashed var(--gold); outline-offset: 4px; border-radius: 8px;
+  cursor: grab; touch-action: none;
+}
+body.editlayout #joystick { opacity: 1 !important; pointer-events: auto !important; }

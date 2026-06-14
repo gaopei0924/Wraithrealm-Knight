@@ -11,6 +11,7 @@ const DEFAULT = {
   music: true,
   autoAttack: true,
   autoCast: true,
+  layout: {}, // key → { x, y } drag offsets for on-screen controls
   bestiary: {}, // monsterId → kill count
   achievements: {}, // id → true
 };
@@ -46,6 +47,9 @@ export const Save = {
   setMusic(m) { state.music = m; persist(); },
   setAutoAttack(v) { state.autoAttack = v; persist(); },
   setAutoCast(v) { state.autoCast = v; persist(); },
+  get layout() { return state.layout; },
+  setLayout(key, x, y) { state.layout[key] = { x, y }; persist(); },
+  resetLayout() { state.layout = {}; persist(); },
 
   recordScore(score, stageIndex) {
     let best = false;
