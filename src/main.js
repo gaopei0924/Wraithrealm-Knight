@@ -115,11 +115,13 @@ class Game {
 
     this.hud.setLoading(0.6, '喚醒英雄與亡者…');
     // Preload every hero + enemy rig so character-select + stages are instant.
-    for (const m of new Set(['Knight', 'Barbarian', 'Mage', 'Rogue', 'Rogue_Hooded',
+    const rigs = [...new Set(['Knight', 'Barbarian', 'Mage', 'Rogue', 'Rogue_Hooded',
       'Grave_Zombie', 'Grave_Vampire', 'Grave_Skeleton', 'Grave_Ghost',
       'Skeleton_Minion', 'Skeleton_Rogue', 'Skeleton_Warrior', 'Skeleton_Mage',
-      ...COMPANION_MODELS])) {
-      await this.assets.loadGltf(`/assets/characters/${m}.glb`);
+      ...COMPANION_MODELS])];
+    for (let i = 0; i < rigs.length; i++) {
+      await this.assets.loadGltf(`/assets/characters/${rigs[i]}.glb`);
+      this.hud.setLoading(0.6 + 0.38 * ((i + 1) / rigs.length), '喚醒英雄與亡者…');
     }
 
     this.clock = new THREE.Clock();
@@ -146,6 +148,10 @@ class Game {
     if (this.started) return;
     this.started = true;
     this.difficulty = difficulty;
+    // Swap the setup screen for a progress bar so there's no black screen while
+    // the hero + dungeon build.
+    document.getElementById('setup').classList.add('hidden');
+    this.hud.setLoading(0.08, '召喚英雄…');
     // Build the chosen hero now.
     const charDef = CHARACTERS[characterId] ?? CHARACTERS[DEFAULT_CHARACTER];
     const charData = await this.assets.character(charDef.model);
@@ -161,6 +167,7 @@ class Game {
     const ids = [...new Set([...(loadoutIds ?? []), charDef.signature])].slice(0, 8);
     this.player.setLoadout(ids);
     this.hud.setSkillBar(this.player.loadout);
+    this.hud.setLoading(0.18, '銘刻屬性與裝備…');
     await this.hud.paintPortrait(this.engine.renderer, this.engine.scene, this.player.char.model, charDef.headNode);
 
     this.sfx.ensure();
@@ -175,17 +182,21 @@ class Game {
     if (isTouchDevice() && !wentFull) requestFullscreenOnFirstGesture();
     if (!wentFull) document.getElementById('fullscreen-btn').classList.add('nudge');
 
+    this.runStart = performance.now();
+    this.stageIndex = -1;
+    // Dungeon build drives the bar from 25% → 92%.
+    await this.loadStage(0, (p) => this.hud.setLoading(0.25 + p * 0.67, '建構地城…'));
+    this.hud.setLoading(0.96, '召喚同伴…');
+    await this.addCompanion(STARTER_COMPANION); // everyone starts with a loyal ally
+    this.engine.render(); // draw one frame so the scene is visible before reveal
+    this.hud.setLoading(1, '出發！');
     this.hud.hideLoading();
     this.hud.show();
     this.layoutEditor.apply(); // restore saved control positions
-    this.runStart = performance.now();
-    this.stageIndex = -1;
-    await this.loadStage(0);
-    await this.addCompanion(STARTER_COMPANION); // everyone starts with a loyal ally
     this.engine.renderer.setAnimationLoop(() => this.frame());
   }
 
-  async loadStage(index) {
+  async loadStage(index, onBuildProgress = null) {
     this.stageIndex = index;
     const stage = STAGES[index];
     if (this.builder) this.builder.dispose();
@@ -203,7 +214,7 @@ class Game {
       combatCount: stage.combatCount, sizeScale: stage.sizeScale, wavePlans,
     });
     this.builder = new DungeonBuilder(this.assets, this.physics, this.engine.scene);
-    this.rooms = await this.builder.build(this.layout, stage.theme);
+    this.rooms = await this.builder.build(this.layout, stage.theme, onBuildProgress);
     this.engine.applyTheme(stage.theme);
     this.torches = new TorchLights(this.engine.scene, this.builder.torchPoints, stage.theme.torch);
 
@@ -361,9 +372,16 @@ class Game {
         }
         break;
       case 'meteor': {
-        const pt = new THREE.Vector3(origin.x + Math.sin(facing) * fx.dist, 0, origin.z + Math.cos(facing) * fx.dist);
-        this.fx.telegraph(pt, fx.range, fx.color, fx.delay);
-        this.pendingMeteors.push({ pt, fx, damage, at: performance.now() + fx.delay * 1000 });
+        const center = new THREE.Vector3(origin.x + Math.sin(facing) * fx.dist, 0, origin.z + Math.cos(facing) * fx.dist);
+        const count = fx.count ?? 1;
+        for (let i = 0; i < count; i++) {
+          // spread extra meteors around the aim point
+          const a = (i / count) * Math.PI * 2;
+          const off = i === 0 ? 0 : fx.range * 0.9;
+          const pt = new THREE.Vector3(center.x + Math.cos(a) * off, 0, center.z + Math.sin(a) * off);
+          this.fx.telegraph(pt, fx.range, fx.color, fx.delay);
+          this.pendingMeteors.push({ pt, fx, damage, at: performance.now() + fx.delay * 1000 + i * 120 });
+        }
         break;
       }
     }
@@ -391,7 +409,7 @@ class Game {
   applyNova(origin, fx, damage) {
     this.fx.ringBurst(origin, fx.range, fx.color);
     this.engine.addShake(fx.shake ?? 0.2);
-    let hit = false;
+    let hit = false, hitCount = 0;
     for (const enemy of this.director.aliveEnemies) {
       if (enemy.position.distanceTo(origin) <= fx.range + enemy.def.radius) {
         const crit = Math.random() < this.player.stats.critChance;
@@ -399,9 +417,10 @@ class Game {
         this.applyDamage(enemy, dmg, origin, fx.knockback ?? 5, crit);
         if (fx.slow) enemy.applySlow(fx.slow.factor, fx.slow.duration);
         if (fx.dot) enemy.applyDot(fx.dot.dps, fx.dot.duration);
-        hit = true;
+        hit = true; hitCount++;
       }
     }
+    if (fx.healPerHit && hitCount) this.player.heal(fx.healPerHit * hitCount);
     if (hit) this.sfx.hit();
   }
 
@@ -825,9 +844,11 @@ class Game {
   updateCompanions(dt) {
     if (!this.companions?.length) return;
     const enemies = this.director.aliveEnemies;
+    // Companions grow stronger as waves progress (+5% damage per wave reached).
+    const waveScale = 1 + 0.05 * (this.director.globalWave ?? 0);
     const ctx = {
       enemies,
-      power: this.player.stats.companionPower,
+      power: this.player.stats.companionPower * waveScale,
       fx: this.fx,
       onHeal: (amt) => this.player.heal(amt),
       dealDamage: (enemy, dmg, from, knock) => {

@@ -89,6 +89,57 @@ export const SKILLS = {
     mp: 48, cooldown: 11, anim: 'Spellcast_Shoot', animSpeed: 1.3, hitAt: 0.4, sfx: 'whirl',
     effect: { type: 'meteor', damage: 90, range: 4.2, dist: 5, knockback: 9, color: 0xff7a22, delay: 0.5 },
   },
+  // --- wave 9: 10 more skills ---
+  holylight: {
+    id: 'holylight', name: '聖光審判', icon: 'heal', desc: '神聖爆發，每擊中一名敵人回復生命',
+    mp: 34, cooldown: 7, anim: 'Spellcast_Raise', animSpeed: 1.3, hitAt: 0.42, sfx: 'levelUp',
+    effect: { type: 'nova', range: 4.6, damage: 36, knockback: 5, color: 0xffe88a, shake: 0.25, healPerHit: 6 },
+  },
+  bladestorm: {
+    id: 'bladestorm', name: '刀刃風暴', icon: 'whirlwind', desc: '寬幅旋斬，重創前方一大片敵人',
+    mp: 32, cooldown: 6, anim: '2H_Melee_Attack_Spin', animSpeed: 1.4, hitAt: 0.4, sfx: 'whirl',
+    effect: { type: 'arc', range: 4.2, arc: 2.7, damage: 40, knockback: 8, color: 0xffd0a0, shake: 0.28 },
+  },
+  earthquake: {
+    id: 'earthquake', name: '大地崩裂', icon: 'shockwave', desc: '撕裂大地，劇烈擊退並持續崩傷',
+    mp: 36, cooldown: 8, anim: 'Block_Attack', animSpeed: 1.2, hitAt: 0.42, sfx: 'whirl',
+    effect: { type: 'nova', range: 5.2, damage: 22, knockback: 15, color: 0xc69a52, shake: 0.45, dot: { dps: 12, duration: 4 } },
+  },
+  thunderstorm: {
+    id: 'thunderstorm', name: '雷霆風暴', icon: 'chain', desc: '狂暴閃電在更多敵人間連跳',
+    mp: 38, cooldown: 6, anim: 'Spellcast_Shoot', animSpeed: 1.4, hitAt: 0.42, sfx: 'whirl',
+    effect: { type: 'chain', damage: 30, jumps: 7, range: 11, color: 0xbfe6ff },
+  },
+  absolutezero: {
+    id: 'absolutezero', name: '絕對零度', icon: 'frost', desc: '極寒爆發，幾乎凍結全場敵人',
+    mp: 40, cooldown: 9, anim: 'Spellcast_Raise', animSpeed: 1.2, hitAt: 0.45, sfx: 'whirl',
+    effect: { type: 'nova', range: 4.8, damage: 24, knockback: 3, color: 0x9fe6ff, slow: { factor: 0.18, duration: 4 } },
+  },
+  soulreaper: {
+    id: 'soulreaper', name: '噬魂狂潮', icon: 'bloodlust', desc: '7 秒內傷害 +40%、吸血 +25%',
+    mp: 42, cooldown: 13, anim: 'Cheer', animSpeed: 1.2, hitAt: 0.4, sfx: 'levelUp',
+    effect: { type: 'buff', duration: 7, damageMult: 1.4, lifesteal: 0.25, color: 0xb0204a },
+  },
+  meteorshower: {
+    id: 'meteorshower', name: '隕石雨', icon: 'fireball', desc: '召喚三顆隕石覆蓋前方區域',
+    mp: 55, cooldown: 13, anim: 'Spellcast_Shoot', animSpeed: 1.3, hitAt: 0.4, sfx: 'whirl',
+    effect: { type: 'meteor', damage: 55, range: 3.4, dist: 6, knockback: 7, color: 0xff8a2a, delay: 0.5, count: 3 },
+  },
+  arcanebarrage: {
+    id: 'arcanebarrage', name: '奧術轟擊', icon: 'fireball', desc: '高速奧術彈，落點巨大爆裂',
+    mp: 34, cooldown: 4, anim: 'Spellcast_Shoot', animSpeed: 1.5, hitAt: 0.4, sfx: 'whirl',
+    effect: { type: 'projectile', damage: 50, radius: 3.4, speed: 19, knockback: 7, color: 0xc070ff },
+  },
+  warcry: {
+    id: 'warcry', name: '不屈戰吼', icon: 'shield', desc: '8 秒傷害 +25% 並立即回復生命',
+    mp: 36, cooldown: 12, anim: 'Cheer', animSpeed: 1.2, hitAt: 0.4, sfx: 'levelUp',
+    effect: { type: 'buff', duration: 8, damageMult: 1.25, healInstant: 40, color: 0xffc060 },
+  },
+  venomflood: {
+    id: 'venomflood', name: '劇毒洪流', icon: 'poison', desc: '噴湧劇毒，造成強力持續毒傷',
+    mp: 34, cooldown: 7, anim: 'Spellcast_Raise', animSpeed: 1.3, hitAt: 0.45, sfx: 'whirl',
+    effect: { type: 'nova', range: 4.4, damage: 12, knockback: 2, color: 0x88dd44, dot: { dps: 22, duration: 5 } },
+  },
 };
 
 export const SKILL_LIST = Object.values(SKILLS);

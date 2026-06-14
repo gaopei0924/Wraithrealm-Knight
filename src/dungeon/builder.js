@@ -82,11 +82,12 @@ export class DungeonBuilder {
     return body;
   }
 
-  async build(layout, theme = {}) {
+  async build(layout, theme = {}, onProgress = null) {
     this.theme = theme;
     this.floorVariants = theme.floors ?? DEFAULT_FLOORS;
     this.wallVariants = theme.walls ?? DEFAULT_WALLS;
     this.torchChance = theme.torchChance ?? 0.22;
+    const yield_ = () => new Promise((r) => requestAnimationFrame(r));
 
     const rand = mulberry32(layout.seed * 7919 + 13);
     const names = [
@@ -96,12 +97,16 @@ export class DungeonBuilder {
       ...BANNERS,
       'wall_gated', 'wall_doorway', 'pillar', 'torch_mounted', 'chest_gold', 'wall_corner_small',
     ];
+    onProgress?.(0.1);
     await this.assets.resolveTiles([...new Set(names)]);
-
+    onProgress?.(0.5); await yield_();
     this.buildFloors(layout, rand);
+    onProgress?.(0.68); await yield_();
     this.buildWalls(layout, rand);
+    onProgress?.(0.84); await yield_();
     this.buildGates(layout);
     this.buildRoomDressing(layout, rand);
+    onProgress?.(1); await yield_();
     return this.roomBounds(layout);
   }
 
