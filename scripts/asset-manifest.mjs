@@ -85,7 +85,18 @@ const dungeonTiles = [
   'banner_thin_red.gltf.glb', 'banner_triple_green.gltf.glb',
 ];
 
+// Kenney "Graveyard Kit" animated characters (CC0), resolved via the GitHub LFS
+// media endpoint of a public mirror. Used as extra undead heroes via the
+// animation-alias layer (their clips: idle/walk/sprint/die/attack-melee/…).
+const GRAVE = 'https://media.githubusercontent.com/media/lazyxeon/AstraWeave-AI-Native-Gaming-Engine/main/assets/3D%20assets/Graveyard%20Kit/Models/GLB%20format';
+
 const characters = [
+  { url: `${GRAVE}/character-zombie.glb`, out: 'characters/Grave_Zombie.glb' },
+  { url: `${GRAVE}/character-vampire.glb`, out: 'characters/Grave_Vampire.glb' },
+  { url: `${GRAVE}/character-skeleton.glb`, out: 'characters/Grave_Skeleton.glb' },
+  { url: `${GRAVE}/character-ghost.glb`, out: 'characters/Grave_Ghost.glb' },
+  // shared palette texture the Graveyard GLBs reference as Textures/colormap.png
+  { url: 'https://media.githubusercontent.com/media/lazyxeon/AstraWeave-AI-Native-Gaming-Engine/main/assets/3D%20assets/Graveyard%20Kit/Models/FBX%20format/Textures/colormap.png', out: 'characters/Textures/colormap.png' },
   { url: `${ADV_BASE}/Knight.glb`, out: 'characters/Knight.glb' },
   { url: `${ADV_BASE}/Barbarian.glb`, out: 'characters/Barbarian.glb' },
   { url: `${ADV_BASE}/Mage.glb`, out: 'characters/Mage.glb' },

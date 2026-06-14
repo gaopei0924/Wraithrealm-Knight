@@ -114,10 +114,12 @@ export class Player {
     this.stats.critChance += s.critChance ?? 0;
     this.stats.critMult += s.critMult ?? 0;
     this.stats.lifesteal += s.lifesteal ?? 0;
+    this.stats.dodgeChance += s.dodgeChance ?? 0;
     this.hp = this.stats.maxHp;
     this.mp = this.stats.maxMp;
     this.character = def;
     if (def.tint) this.char.setTint(def.tint, 0.4);
+    if (def.modelScale) this.char.model.scale.setScalar(def.modelScale);
   }
 
   applyChill(factor, duration) {

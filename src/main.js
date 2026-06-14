@@ -111,6 +111,7 @@ class Game {
     this.hud.setLoading(0.6, '喚醒英雄與亡者…');
     // Preload every hero + enemy rig so character-select + stages are instant.
     for (const m of ['Knight', 'Barbarian', 'Mage', 'Rogue', 'Rogue_Hooded',
+      'Grave_Zombie', 'Grave_Vampire', 'Grave_Skeleton', 'Grave_Ghost',
       'Skeleton_Minion', 'Skeleton_Rogue', 'Skeleton_Warrior', 'Skeleton_Mage']) {
       await this.assets.loadGltf(`/assets/characters/${m}.glb`);
     }
