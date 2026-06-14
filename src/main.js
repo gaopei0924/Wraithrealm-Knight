@@ -668,7 +668,7 @@ class Game {
       if (this.auraTimer <= 0) {
         this.auraTimer = 0.5;
         const r = this.fx.auraRadius ?? 3;
-        const dmg = (5 + p.weapons.aura * 4) * p.damageMult;
+        const dmg = (5 + p.weapons.aura * 4) * 0.25 * p.damageMult;
         for (const e of d.aliveEnemies) {
           if (e.position.distanceTo(p.position) <= r + e.def.radius) this.applyDamage(e, dmg, p.position, 1, false, 'burn');
         }

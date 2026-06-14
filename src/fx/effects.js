@@ -409,7 +409,7 @@ export class Effects {
   setAuraDisc(level, color = 0xff7a3a) {
     if (this.auraDisc) { this.scene.remove(this.auraDisc); this.auraDisc = null; }
     if (level <= 0) return;
-    const radius = 2.6 + level * 0.5;
+    const radius = (2.6 + level * 0.5) * 2;
     const mat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.14, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending });
     const disc = new THREE.Mesh(new THREE.CircleGeometry(radius, 36), mat);
     disc.rotation.x = -Math.PI / 2;
