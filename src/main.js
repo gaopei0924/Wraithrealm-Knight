@@ -14,8 +14,9 @@ import { Player } from './entities/player.js';
 import { WaveDirector } from './entities/spawner.js';
 import { rollUpgradeChoices } from './combat/upgrades.js';
 import { DIFFICULTIES, enemyMods, buildWavePlans } from './combat/difficulty.js';
-import { SLOTS_PER_MILESTONE } from './combat/skills.js';
+import { SLOTS_PER_MILESTONE, SKILL_KEYS } from './combat/skills.js';
 import { BOSSES } from './combat/bosses.js';
+import { CHARACTERS, DEFAULT_CHARACTER } from './combat/characters.js';
 import { Achievements } from './combat/achievements.js';
 import { ENEMY_TYPES } from './entities/enemy.js';
 import { Hud } from './ui/hud.js';
@@ -52,10 +53,10 @@ class Game {
     this.damageDealt = 0;
 
     fitViewport(() => this.engine.onResize());
+    watchOrientation(); // tag body.portrait; game plays in any orientation
     if (isTouchDevice()) {
       document.body.classList.add('touch');
       suppressBrowserGestures();
-      watchOrientation(document.getElementById('rotate-prompt'));
     }
     const fsBtn = document.getElementById('fullscreen-btn');
     fsBtn.addEventListener('click', () => { if (isFullscreen()) exitFullscreen(); else enterFullscreen(); });
@@ -83,7 +84,10 @@ class Game {
       onShake: (on) => { Save.setShake(on); this.engine.shakeEnabled = on; },
       onMute: (m) => { Save.setMuted(m); this.sfx.setMuted(m); },
       onMusic: (on) => { Save.setMusic(on); if (on) this.sfx.startMusic(); else this.sfx.stopMusic(); },
+      onAutoAtk: (v) => Save.setAutoAttack(v),
+      onAutoCast: (v) => Save.setAutoCast(v),
       volume: Save.volume, shake: Save.shake, muted: Save.muted, music: Save.music,
+      autoAttack: Save.autoAttack, autoCast: Save.autoCast,
       fsAvailable: !!document.documentElement.requestFullscreen,
     });
     this.engine.shakeEnabled = Save.shake;
@@ -94,32 +98,35 @@ class Game {
     await this.assets.loadTileManifest();
     this.fx = new Effects(this.engine.scene);
 
-    this.hud.setLoading(0.4, '喚醒騎士…');
-    const knight = await this.assets.character('Knight');
-    this.player = new Player(knight, this.engine.scene, this.physics, this.sfx);
-    this.wirePlayerEvents();
-
-    this.hud.setLoading(0.7, '亡者甦醒中…');
-    for (const m of ['Skeleton_Minion', 'Skeleton_Rogue', 'Skeleton_Warrior', 'Skeleton_Mage',
-      'Barbarian', 'Mage', 'Rogue', 'Rogue_Hooded']) {
+    this.hud.setLoading(0.6, '喚醒英雄與亡者…');
+    // Preload every hero + enemy rig so character-select + stages are instant.
+    for (const m of ['Knight', 'Barbarian', 'Mage', 'Rogue', 'Rogue_Hooded',
+      'Skeleton_Minion', 'Skeleton_Rogue', 'Skeleton_Warrior', 'Skeleton_Mage']) {
       await this.assets.loadGltf(`/assets/characters/${m}.glb`);
     }
-
-    this.hud.setLoading(0.95, '雕琢肖像…');
-    await this.hud.paintPortrait(this.engine.renderer, this.engine.scene, this.player.char.model);
 
     this.clock = new THREE.Clock();
     window.__game = this;
     this.hud.setLoading(1, '準備就緒');
-    this.hud.showSetup(DIFFICULTIES, (difficulty, loadoutIds) => this.beginRun(difficulty, loadoutIds));
+    this.hud.showSetup(DIFFICULTIES, CHARACTERS, (difficulty, loadoutIds, characterId) =>
+      this.beginRun(difficulty, loadoutIds, characterId));
   }
 
-  async beginRun(difficulty, loadoutIds) {
+  async beginRun(difficulty, loadoutIds, characterId) {
     if (this.started) return;
     this.started = true;
     this.difficulty = difficulty;
-    this.player.setLoadout(loadoutIds);
+    // Build the chosen hero now.
+    const charDef = CHARACTERS[characterId] ?? CHARACTERS[DEFAULT_CHARACTER];
+    const charData = await this.assets.character(charDef.model);
+    this.player = new Player(charData, this.engine.scene, this.physics, this.sfx);
+    this.player.applyCharacter(charDef);
+    this.wirePlayerEvents();
+    // chosen skills + the hero's signature skill (deduped, capped at 8)
+    const ids = [...new Set([...(loadoutIds ?? []), charDef.signature])].slice(0, 8);
+    this.player.setLoadout(ids);
     this.hud.setSkillBar(this.player.loadout);
+    await this.hud.paintPortrait(this.engine.renderer, this.engine.scene, this.player.char.model, charDef.headNode);
 
     this.sfx.ensure();
     this.sfx.setVolume(Save.volume);
@@ -127,11 +134,10 @@ class Game {
     if (this.sfx.ctx?.state === 'suspended') this.sfx.ctx.resume();
     if (Save.music) this.sfx.startMusic();
 
+    // Fullscreen if available (Android), but DON'T lock orientation — the game
+    // plays portrait or landscape, so the player keeps their phone as they hold it.
     const wentFull = await enterFullscreen();
-    if (isTouchDevice()) {
-      await lockLandscape();
-      if (!wentFull) requestFullscreenOnFirstGesture();
-    }
+    if (isTouchDevice() && !wentFull) requestFullscreenOnFirstGesture();
     if (!wentFull) document.getElementById('fullscreen-btn').classList.add('nudge');
 
     this.hud.hideLoading();
@@ -152,6 +158,8 @@ class Game {
     this.hud.hideBossBar();
     this.hud.setEnrage(false);
     this.bossRef = null;
+    this.chestTimer = 22; this.healthTimer = 28;
+    this.refreshPassives();
 
     const wavePlans = buildWavePlans(stage, this.difficulty);
     this.layout = generateLayout(Math.floor(Math.random() * 1e9), {
@@ -184,6 +192,7 @@ class Game {
         onBossSpawn: (b) => this.onBossSpawn(b),
         onEnemyExplode: (e, spec) => this.resolveExplosion(e, spec),
         onBlink: (pos) => this.fx.ringBurst(pos, 1.6, 0x9fb8ff),
+        onThorns: (e) => this.onThorns(e),
       },
     });
     await this.director.preloadCharacters();
@@ -400,7 +409,7 @@ class Game {
       this.hud.toast('寶藏！', `+${enemy.def.goldDrop} 金幣`);
       this.sfx.coin();
     } else {
-      this.player.gold += enemy.elite ? 12 : 3;
+      this.player.gold += Math.round((enemy.elite ? 12 : 3) * this.player.stats.goldMult);
       if (Math.random() < (enemy.elite ? 0.9 : 0.14)) this.fx.spawnPickup(enemy.position, Math.random() < 0.6 ? 'heal' : 'mana');
       if (Math.random() < 0.5) this.fx.spawnPickup(enemy.position, 'gold');
       // rare Soul Bomb that clears the screen when collected
@@ -422,7 +431,7 @@ class Game {
   collectPickup(kind) {
     if (kind === 'heal') { this.player.heal(this.player.stats.maxHp * 0.12); this.sfx.pickup(); }
     else if (kind === 'mana') { this.player.mp = Math.min(this.player.stats.maxMp, this.player.mp + 25); this.sfx.pickup(); }
-    else if (kind === 'gold') { this.player.gold += 5; this.addScore(10); this.sfx.coin(); }
+    else if (kind === 'gold') { this.player.gold += Math.round(5 * this.player.stats.goldMult); this.addScore(10); this.sfx.coin(); }
     else if (kind === 'bomb') this.detonateSoulBomb();
   }
 
@@ -451,7 +460,7 @@ class Game {
         this.player.addSkill(skill.id); this.hud.setSkillBar(this.player.loadout); this.paused = false;
       });
     } else {
-      this.hud.showUpgradeChoices(rollUpgradeChoices(3), (choice) => { choice.apply(this.player); this.paused = false; });
+      this.hud.showUpgradeChoices(rollUpgradeChoices(3), (choice) => { choice.apply(this.player); this.refreshPassives(); this.paused = false; });
     }
   }
 
@@ -540,7 +549,9 @@ class Game {
 
     if (this.comboTimer > 0) { this.comboTimer -= dt; if (this.comboTimer <= 0) this.combo = 0; }
 
+    this.autoCombat();
     player.update(dt, this.input);
+    this.updateSurvivors(dt);
     if (player.state === 'roll') fx.trail(player.position);
     director.update(dt, player, (e) => {
       const target = e._target ?? player.position;
@@ -570,8 +581,9 @@ class Game {
     }
 
     fx.update(dt);
-    fx.updateOrbs(dt, player.position, (xp) => { player.gainXp(xp); this.sfx.orb(); });
-    fx.updatePickups(dt, player.position, (kind) => this.collectPickup(kind));
+    const mag = player.stats.magnet;
+    fx.updateOrbs(dt, player.position, (xp) => { player.gainXp(xp); this.sfx.orb(); }, mag);
+    fx.updatePickups(dt, player.position, (kind) => this.collectPickup(kind), mag);
     for (const hit of fx.updateBolts(dt, player.position)) {
       if (player.takeDamage(hit.damage)) {
         this.hud.damageNumber(player.position, hit.damage, 'player-hit');
@@ -603,6 +615,92 @@ class Game {
   onPlayerHurt() {
     this.hud.flashHurt();
     this.engine.addShake(0.18);
+  }
+
+  // Auto-attack + auto-cast (survivors-style): runs before player.update so the
+  // buffered inputs resolve this frame. Respects the settings toggles.
+  autoCombat() {
+    const p = this.player, d = this.director;
+    if (!p?.alive) return;
+    const enemies = d.aliveEnemies.filter((e) => e.type !== 'goblin');
+    if (!enemies.length) return;
+    let near = null, best = 1e9;
+    for (const e of enemies) {
+      const dd = e.position.distanceToSquared(p.position);
+      if (dd < best) { best = dd; near = e; }
+    }
+    const dist = Math.sqrt(best);
+    if (Save.autoAttack && (p.state === 'idle' || p.state === 'move') && dist < 3.4) {
+      p.char.snapFacing(Math.atan2(near.position.x - p.position.x, near.position.z - p.position.z));
+      this.input.triggerAttack();
+    }
+    if (Save.autoCast && dist < 7) {
+      const now = performance.now();
+      if (now - (this._autoCastT ?? 0) > 450) {
+        for (let i = 0; i < p.loadout.length; i++) {
+          if (p.skillCd[i] <= 0 && p.mp >= p.loadout[i].mp) {
+            this._autoCastT = now; this.input.triggerKey(SKILL_KEYS[i]); break;
+          }
+        }
+      }
+    }
+  }
+
+  // Passive auto-weapons + survival timers.
+  updateSurvivors(dt) {
+    const p = this.player, d = this.director, now = performance.now();
+    // damage aura
+    if (p.weapons.aura > 0) {
+      this.fx.updateAuraDisc(p.position);
+      this.auraTimer = (this.auraTimer ?? 0) - dt;
+      if (this.auraTimer <= 0) {
+        this.auraTimer = 0.5;
+        const r = this.fx.auraRadius ?? 3;
+        const dmg = (5 + p.weapons.aura * 4) * p.damageMult;
+        for (const e of d.aliveEnemies) {
+          if (e.position.distanceTo(p.position) <= r + e.def.radius) this.applyDamage(e, dmg, p.position, 1, false, 'burn');
+        }
+      }
+    }
+    // frost aura — chills nearby
+    if (p.weapons.frost > 0) {
+      const r = 3 + p.weapons.frost * 0.6;
+      for (const e of d.aliveEnemies) if (e.position.distanceTo(p.position) < r) e.applySlow(0.5, 0.6);
+    }
+    // orbiting blades
+    if (p.weapons.orbit > 0) {
+      const pts = this.fx.updateOrbit(dt, p.position);
+      const dmg = (8 + p.weapons.orbit * 6) * p.damageMult;
+      for (const e of d.aliveEnemies) {
+        e._orbCd = (e._orbCd ?? 0) - dt;
+        if (e._orbCd > 0) continue;
+        for (const pt of pts) {
+          const dx = e.position.x - pt.x, dz = e.position.z - pt.z;
+          if (dx * dx + dz * dz < (0.85 + e.def.radius) ** 2) { this.applyDamage(e, dmg, p.position, 4, false); e._orbCd = 0.4; break; }
+        }
+      }
+    }
+    // periodic treasure + health (survivors map events)
+    this.chestTimer = (this.chestTimer ?? 22) - dt;
+    if (this.chestTimer <= 0) {
+      this.chestTimer = 24;
+      for (let i = 0; i < 6; i++) this.fx.spawnPickup(p.position, 'gold');
+      this.fx.spawnPickup(p.position, 'heal');
+      this.hud.toast('寶箱', '補給湧現');
+    }
+    this.healthTimer = (this.healthTimer ?? 28) - dt;
+    if (this.healthTimer <= 0) { this.healthTimer = 30; this.fx.spawnPickup(p.position, Math.random() < 0.5 ? 'heal' : 'mana'); }
+  }
+
+  onThorns(enemy) {
+    const dmg = 6 + this.player.weapons.thorns * 6;
+    this.applyDamage(enemy, dmg, this.player.position, 3, false);
+  }
+
+  // Re-create the persistent passive-weapon visuals from current levels.
+  refreshPassives() {
+    this.fx.setOrbit(this.player.weapons.orbit);
+    this.fx.setAuraDisc(this.player.weapons.aura);
   }
 }
 

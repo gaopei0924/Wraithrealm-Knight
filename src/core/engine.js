@@ -42,6 +42,8 @@ export class Engine {
     this.shake = 0;
     this.shakeEnabled = true;
     this.timeScale = 1;
+    this.camScale = 1; // zoomed out more in portrait so enough is visible
+    this.updateCamScale(vp0.w / vp0.h);
 
     this.setupLights();
     window.addEventListener('resize', () => this.onResize());
@@ -76,6 +78,13 @@ export class Engine {
     this.camera.aspect = vp.w / vp.h;
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(vp.w, vp.h);
+    this.updateCamScale(vp.w / vp.h);
+  }
+
+  // Portrait viewports are tall+narrow, so pull the camera back to keep a
+  // playable horizontal field of view.
+  updateCamScale(aspect) {
+    this.camScale = aspect < 1 ? Math.min(1.75, Math.max(1, (1 / aspect) * 0.92)) : 1;
   }
 
   // Re-tint scene atmosphere for a biome theme.
@@ -91,7 +100,9 @@ export class Engine {
   // Keeps the shadow camera centered on the action as the player traverses rooms.
   followCamera(targetPos, dt) {
     this.cameraTarget.lerp(targetPos, Math.min(1, CAMERA_LERP * dt));
-    const desired = this.cameraTarget.clone().add(CAMERA_OFFSET);
+    const desired = this.cameraTarget.clone().add(
+      CAMERA_OFFSET.clone().multiplyScalar(this.camScale),
+    );
     if (this.shake > 0) {
       this.shake = Math.max(0, this.shake - dt * 3);
       desired.x += (Math.random() - 0.5) * this.shake;

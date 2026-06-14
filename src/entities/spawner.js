@@ -149,6 +149,7 @@ export class WaveDirector {
       const hit = player.takeDamage(damage);
       if (!hit) return;
       this.events.onPlayerHit?.(damage);
+      if (player.weapons?.thorns > 0) this.events.onThorns?.(enemy); // reflect
       if (statusSpec?.type === 'chill') player.applyChill(statusSpec.factor, statusSpec.duration);
       else if (statusSpec?.type === 'poison') player.applyPoison(statusSpec.dps, statusSpec.duration);
     };

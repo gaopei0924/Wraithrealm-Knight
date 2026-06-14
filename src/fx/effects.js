@@ -102,10 +102,10 @@ export class Effects {
   }
 
   // Orbs scatter briefly, then home to the player and award XP on contact.
-  updateOrbs(dt, playerPos, onCollect) {
+  updateOrbs(dt, playerPos, onCollect, magnet = 1) {
     this.orbs = this.orbs.filter((orb) => {
       orb.age += dt;
-      if (orb.age < 0.35) {
+      if (orb.age < 0.35 / magnet) {
         orb.mesh.position.addScaledVector(orb.drift, dt);
       } else {
         const dir = new THREE.Vector3().subVectors(playerPos, orb.mesh.position).setY(0);
@@ -115,7 +115,7 @@ export class Effects {
           onCollect(orb.xp);
           return false;
         }
-        const speed = Math.min(16, 4 + orb.age * 9);
+        const speed = Math.min(16, 4 + orb.age * 9) * magnet;
         orb.mesh.position.addScaledVector(dir.normalize(), speed * dt);
       }
       orb.mesh.position.y = 0.7 + Math.sin(orb.age * 6) * 0.12;
@@ -229,17 +229,17 @@ export class Effects {
     this.pickups.push({ mesh, kind, age: 0, drift });
   }
 
-  updatePickups(dt, playerPos, onCollect) {
+  updatePickups(dt, playerPos, onCollect, magnet = 1) {
     if (!this.pickups) return;
     this.pickups = this.pickups.filter((p) => {
       p.age += dt;
-      if (p.age < 0.3) {
+      if (p.age < 0.3 / magnet) {
         p.mesh.position.addScaledVector(p.drift, dt);
       } else {
         const dir = new THREE.Vector3().subVectors(playerPos, p.mesh.position).setY(0);
         const dist = dir.length();
         if (dist < 0.9) { this.scene.remove(p.mesh); onCollect(p.kind); return false; }
-        p.mesh.position.addScaledVector(dir.normalize(), Math.min(15, 4 + p.age * 8) * dt);
+        p.mesh.position.addScaledVector(dir.normalize(), Math.min(15, 4 + p.age * 8) * magnet * dt);
       }
       p.mesh.position.y = 0.7 + Math.sin(p.age * 6) * 0.12;
       p.mesh.rotation.y += dt * 4;
@@ -367,6 +367,67 @@ export class Effects {
       }
     }
     this.ambient.geometry.attributes.position.needsUpdate = true;
+  }
+
+  // --- passive survivors weapons ---
+  // Orbiting blades: returns each blade's world XZ each frame for damage checks.
+  setOrbit(level, color = 0xfff0a0) {
+    if (this.orbitGroup) { this.scene.remove(this.orbitGroup); this.orbitGroup = null; }
+    this.orbitBlades = [];
+    if (level <= 0) return;
+    const n = 1 + level;
+    const g = new THREE.Group();
+    for (let i = 0; i < n; i++) {
+      const m = new THREE.Mesh(
+        new THREE.BoxGeometry(0.8, 0.14, 0.2),
+        new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false }),
+      );
+      g.add(m);
+      this.orbitBlades.push({ mesh: m, ang: (i / n) * Math.PI * 2 });
+    }
+    this.scene.add(g);
+    this.orbitGroup = g;
+    this.orbitRadius = 2.5;
+  }
+
+  updateOrbit(dt, playerPos) {
+    if (!this.orbitGroup) return [];
+    this.orbitT = (this.orbitT ?? 0) + dt * 2.6;
+    const pts = [];
+    for (const b of this.orbitBlades) {
+      const a = b.ang + this.orbitT;
+      const x = playerPos.x + Math.cos(a) * this.orbitRadius;
+      const z = playerPos.z + Math.sin(a) * this.orbitRadius;
+      b.mesh.position.set(x, 1.0, z);
+      b.mesh.rotation.y = -a;
+      pts.push({ x, z });
+    }
+    return pts;
+  }
+
+  // Persistent damage-aura disc that follows the player.
+  setAuraDisc(level, color = 0xff7a3a) {
+    if (this.auraDisc) { this.scene.remove(this.auraDisc); this.auraDisc = null; }
+    if (level <= 0) return;
+    const radius = 2.6 + level * 0.5;
+    const mat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.14, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending });
+    const disc = new THREE.Mesh(new THREE.CircleGeometry(radius, 36), mat);
+    disc.rotation.x = -Math.PI / 2;
+    this.scene.add(disc);
+    this.auraDisc = disc;
+    this.auraRadius = radius;
+  }
+
+  updateAuraDisc(playerPos) {
+    if (!this.auraDisc) return;
+    this.auraDisc.position.set(playerPos.x, 0.16, playerPos.z);
+    this.auraDisc.material.opacity = 0.1 + 0.05 * Math.sin((this.orbitT ?? 0) * 3);
+  }
+
+  clearPassives() {
+    if (this.orbitGroup) { this.scene.remove(this.orbitGroup); this.orbitGroup = null; }
+    if (this.auraDisc) { this.scene.remove(this.auraDisc); this.auraDisc = null; }
+    this.orbitBlades = [];
   }
 
   update(dt) {

@@ -57,6 +57,32 @@ const dungeonTiles = [
   'coin_stack_small.gltf.glb',
   'bottle_A_brown.gltf.glb',
   'candle_lit.gltf.glb',
+  // --- expanded decor / furniture / structure (50+ more CC0 props) ---
+  'bed_decorated.gltf.glb', 'bed_frame.gltf.glb', 'chair.gltf.glb', 'stool.gltf.glb',
+  'shelf_large.gltf.glb', 'shelf_small.gltf.glb', 'shelf_small_candles.gltf.glb', 'shelves.gltf.glb',
+  'table_long.gltf.glb', 'table_long_decorated_A.gltf.glb', 'table_long_tablecloth.gltf.glb',
+  'table_medium.gltf.glb', 'table_medium_decorated_A.gltf.glb', 'table_medium_tablecloth.gltf.glb',
+  'table_small.gltf.glb', 'table_small_decorated_A.gltf.glb', 'table_small_decorated_B.gltf.glb',
+  'barrel_large_decorated.gltf.glb', 'barrel_small.gltf.glb', 'keg_decorated.gltf.glb',
+  'box_small.gltf.glb', 'box_small_decorated.gltf.glb',
+  'candle.gltf.glb', 'candle_triple.gltf.glb', 'candle_thin_lit.gltf.glb',
+  'plate_stack.gltf.glb', 'plate_food_A.gltf.glb',
+  'bottle_A_green.gltf.glb', 'bottle_B_brown.gltf.glb', 'bottle_C_green.gltf.glb',
+  'coin_stack_large.gltf.glb', 'coin_stack_medium.gltf.glb',
+  'sword_shield.gltf.glb', 'sword_shield_gold.gltf.glb', 'sword_shield_broken.gltf.glb',
+  'trunk_large_A.gltf.glb', 'trunk_medium_A.gltf.glb', 'trunk_small_A.gltf.glb',
+  'barrier.gltf.glb', 'barrier_column.gltf.glb', 'barrier_corner.gltf.glb',
+  'key.gltf.glb', 'keyring_hanging.gltf.glb',
+  // structure / wall variants
+  'wall_window_open.gltf.glb', 'wall_window_closed.gltf.glb', 'wall_archedwindow_open.gltf.glb',
+  'wall_crossing.gltf.glb', 'wall_Tsplit.gltf.glb', 'wall_sloped.gltf.glb', 'wall_doorway_sides.gltf.glb',
+  'stairs.gltf.glb', 'stairs_wood.gltf.glb', 'stairs_wood_decorated.gltf.glb',
+  // new floor families (wood / grates) for biome variety
+  'floor_wood_large.gltf.glb', 'floor_wood_large_dark.gltf.glb', 'floor_wood_small.gltf.glb',
+  'floor_tile_grate.gltf.glb', 'floor_tile_big_spikes.glb',
+  // extra banners (more colors)
+  'banner_blue.gltf.glb', 'banner_green.gltf.glb', 'banner_yellow.gltf.glb', 'banner_white.gltf.glb',
+  'banner_thin_red.gltf.glb', 'banner_triple_green.gltf.glb',
 ];
 
 const characters = [

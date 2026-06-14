@@ -667,3 +667,31 @@ body.touch #help-close, body.touch #shop-done, body.touch #restart-btn { min-hei
 
 .dmg.dodge { color: #9fe6ff; font-size: 20px; font-weight: bold; letter-spacing: 2px; }
 .dmg.crit-pop { color: #ff5533; font-size: 26px; font-weight: bold; }
+
+/* ===================== character select cards ===================== */
+.setup-card.char { width: 150px; padding: 12px 10px; }
+.setup-card.char.selected {
+  border-color: var(--gold);
+  box-shadow: 0 0 18px rgba(201,163,92,0.45), inset 0 0 16px rgba(0,0,0,0.6);
+}
+.setup-card.char .card-name { color: var(--gold); font-size: 18px; }
+
+/* ===================== portrait (vertical) layout ===================== */
+/* Lift the skill bar above the bottom-corner thumb controls so they don't overlap
+   on a narrow screen; controls sit in the very bottom corners. */
+body.portrait #bottom-center { bottom: 128px; }
+body.portrait #skill-bar { max-width: 96vw; }
+body.portrait #exp-bar { width: 86vw; }
+body.portrait #action-cluster { bottom: 16px; right: 10px; }
+body.portrait #joystick { bottom: 22px; }
+body.portrait #gold-line { bottom: 176px; }
+body.portrait #boss-bar { width: 88vw; top: 86px; }
+/* shrink top-left/right clusters a touch so the wave banner has room */
+body.portrait .bar { width: 150px; }
+body.portrait .bar.mp { width: 130px; }
+body.portrait #minimap { width: 88px; height: 88px; }
+body.portrait #wave-text { font-size: 15px; letter-spacing: 4px; }
+
+/* wrap choice cards so they fit narrow / portrait screens */
+#upgrade-cards, #skill-cards { flex-wrap: wrap; max-width: 94vw; }
+body.portrait .upgrade-card, body.portrait .setup-card { width: 132px; }

@@ -31,7 +31,18 @@ export class Player {
       rollCooldown: 1.0, mpRegen: 7,
       lifesteal: 0, critChance: 0.06, critMult: 1.8,
       xpMult: 1, comboFinisherBonus: 1,
+      // survivors-style stats
+      regen: 0,          // hp per second
+      armor: 0,          // 0..0.8 incoming damage reduction
+      dodgeChance: 0,    // chance to negate a hit
+      cdr: 1,            // skill cooldown multiplier (lower = faster)
+      atkSpeed: 1,       // attack/combo speed multiplier
+      magnet: 1,         // pickup pull-speed multiplier
+      goldMult: 1,
+      berserk: 0,        // bonus damage when below 35% HP (additive mult)
     };
+    // Passive auto-weapon levels (survivors-style).
+    this.weapons = { orbit: 0, aura: 0, frost: 0, boomerang: 0, thorns: 0 };
     this.hp = this.stats.maxHp;
     this.mp = this.stats.maxMp;
     this.potions = 3;
@@ -77,9 +88,11 @@ export class Player {
     return this.state !== 'dead';
   }
 
-  // Effective stats fold in the active buff (bloodlust).
+  // Effective stats fold in the active buff (bloodlust) + berserk when low.
   get damageMult() {
-    return this.stats.damageMult * (this.buff?.damageMult ?? 1);
+    let m = this.stats.damageMult * (this.buff?.damageMult ?? 1);
+    if (this.stats.berserk > 0 && this.hp < this.stats.maxHp * 0.35) m *= 1 + this.stats.berserk;
+    return m;
   }
 
   get lifesteal() {
@@ -89,6 +102,21 @@ export class Player {
   setLoadout(ids) {
     this.loadout = ids.map((id) => SKILLS[id]).filter(Boolean);
     this.skillCd = this.loadout.map(() => 0);
+  }
+
+  // Apply a character's stat identity (multipliers / additive perks).
+  applyCharacter(def) {
+    const s = def.stats ?? {};
+    this.stats.maxHp = Math.round(this.stats.maxHp * (s.maxHp ?? 1));
+    this.stats.damageMult *= s.damageMult ?? 1;
+    this.stats.moveSpeed *= s.moveSpeed ?? 1;
+    this.stats.mpRegen *= s.mpRegen ?? 1;
+    this.stats.critChance += s.critChance ?? 0;
+    this.stats.critMult += s.critMult ?? 0;
+    this.stats.lifesteal += s.lifesteal ?? 0;
+    this.hp = this.stats.maxHp;
+    this.mp = this.stats.maxMp;
+    this.character = def;
   }
 
   applyChill(factor, duration) {
@@ -132,6 +160,7 @@ export class Player {
       this.skillCd[i] = Math.max(0, this.skillCd[i] - dt);
     }
     this.mp = Math.min(this.stats.maxMp, this.mp + this.stats.mpRegen * dt);
+    if (this.stats.regen > 0) this.hp = Math.min(this.stats.maxHp, this.hp + this.stats.regen * dt);
     if (this.buff && performance.now() > this.buff.until) this.buff = null;
 
     // Poison drain (bypasses i-frames; cannot itself kill below 1 — chip damage).
@@ -212,8 +241,9 @@ export class Player {
     this.comboHitDone = false;
     this.enterState('attack');
     const def = COMBO[stage];
-    this.attackDuration = this.char.clipDuration(def.anim) / def.speed;
-    this.char.play(def.anim, { fade: 0.08, loop: false, timeScale: def.speed, force: true });
+    const spd = def.speed * this.stats.atkSpeed;
+    this.attackDuration = this.char.clipDuration(def.anim) / spd;
+    this.char.play(def.anim, { fade: 0.08, loop: false, timeScale: spd, force: true });
     this.sfx.swing();
   }
 
@@ -289,7 +319,7 @@ export class Player {
     const skill = this.loadout[slot];
     if (!skill || this.skillCd[slot] > 0 || this.mp < skill.mp) return false;
     this.mp -= skill.mp;
-    this.skillCd[slot] = skill.cooldown;
+    this.skillCd[slot] = skill.cooldown * this.stats.cdr;
     this.enterState('skill');
     this.activeSkill = skill;
     this.skillHitDone = false;
@@ -350,7 +380,13 @@ export class Player {
       return false;
     }
     if (this.hitInvulnLeft > 0) return false;
-    this.hp -= amount;
+    // Dodge chance fully negates a hit.
+    if (this.stats.dodgeChance > 0 && Math.random() < this.stats.dodgeChance) {
+      const now = performance.now();
+      if (now - this.lastDodge > 250) { this.lastDodge = now; this.events.onDodge?.(); }
+      return false;
+    }
+    this.hp -= amount * (1 - this.stats.armor); // armor reduces incoming damage
     this.hitInvulnLeft = 0.7;
     this.char.flash();
     this.sfx.hurt();

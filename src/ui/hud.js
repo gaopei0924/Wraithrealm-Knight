@@ -55,7 +55,8 @@ export class Hud {
   // --- pause menu + settings ---
   wireMenu(cfg) {
     const { onToggle, onResume, onRestart, onVolume, volume, onHelp, onFullscreen,
-      onShake, onMute, onMusic, shake = true, muted = false, music = true, fsAvailable = true } = cfg;
+      onShake, onMute, onMusic, onAutoAtk, onAutoCast,
+      shake = true, muted = false, music = true, autoAttack = true, autoCast = true, fsAvailable = true } = cfg;
     $('pause-btn').addEventListener('click', () => onToggle());
     $('menu-btn').addEventListener('click', () => onToggle());
     $('resume-btn').addEventListener('click', () => onResume());
@@ -78,6 +79,10 @@ export class Hud {
     muteBox.addEventListener('change', () => onMute(muteBox.checked));
     const musicBox = $('toggle-music'); musicBox.checked = music;
     musicBox.addEventListener('change', () => onMusic(musicBox.checked));
+    const aaBox = $('toggle-autoatk'); aaBox.checked = autoAttack;
+    aaBox.addEventListener('change', () => onAutoAtk(aaBox.checked));
+    const acBox = $('toggle-autocast'); acBox.checked = autoCast;
+    acBox.addEventListener('change', () => onAutoCast(acBox.checked));
   }
 
   // Help/controls overlay. Lists the live skill keybinds from the loadout.
@@ -127,16 +132,32 @@ export class Hud {
     $('loading').style.display = 'none';
   }
 
-  // Difficulty + skill-loadout chooser. Calls onConfirm(difficulty, [skillIds]).
-  showSetup(difficulties, onConfirm) {
+  // Character + difficulty + skill chooser. Calls onConfirm(difficulty, [skillIds], characterId).
+  showSetup(difficulties, characters, onConfirm) {
     $('loading-text').textContent = '整裝待發';
+    const charRow = $('character-row');
     const diffRow = $('difficulty-row');
     const skillGrid = $('skill-grid');
     const startBtn = $('start-gate');
     const pickLabel = $('skill-pick-count');
 
+    let chosenChar = 'knight';
     let chosenDiff = 'normal';
     const chosenSkills = [...DEFAULT_LOADOUT];
+
+    // character cards
+    charRow.innerHTML = '';
+    for (const c of Object.values(characters)) {
+      const card = document.createElement('button');
+      card.className = 'setup-card char' + (c.id === chosenChar ? ' selected' : '');
+      card.innerHTML = `<div class="card-icon">${icon(c.icon)}</div><div class="card-name">${c.name}</div><div class="card-sub">${c.subtitle}</div><div class="card-desc">${c.desc}</div>`;
+      card.addEventListener('click', () => {
+        chosenChar = c.id;
+        for (const x of charRow.children) x.classList.remove('selected');
+        card.classList.add('selected');
+      });
+      charRow.appendChild(card);
+    }
 
     // difficulty cards
     diffRow.innerHTML = '';
@@ -180,7 +201,7 @@ export class Hud {
     $('setup').classList.remove('hidden');
     startBtn.addEventListener('click', () => {
       if (chosenSkills.length !== STARTING_SLOTS) return;
-      onConfirm(difficulties[chosenDiff], chosenSkills);
+      onConfirm(difficulties[chosenDiff], chosenSkills, chosenChar);
     }, { once: true });
   }
 
@@ -438,12 +459,15 @@ export class Hud {
 
   // Render the knight's face once into the portrait circle via a render
   // target (reliable regardless of preserveDrawingBuffer).
-  async paintPortrait(renderer, scene, model) {
+  async paintPortrait(renderer, scene, model, headNode) {
     const THREE = await import('three');
     const SIZE = 96;
     const cam = new THREE.PerspectiveCamera(30, 1, 0.1, 10);
     model.updateWorldMatrix(true, true);
-    const head = model.getObjectByName('Knight_Head') ?? model;
+    // Find the head: explicit node → any '*Head*' node → the model itself.
+    let head = headNode ? model.getObjectByName(headNode) : null;
+    if (!head) model.traverse((o) => { if (!head && /head/i.test(o.name)) head = o; });
+    head = head ?? model;
     const headPos = new THREE.Vector3();
     head.getWorldPosition(headPos);
     cam.position.set(headPos.x + 0.3, headPos.y + 0.22, headPos.z + 1.45);

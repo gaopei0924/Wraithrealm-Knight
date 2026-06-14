@@ -9,6 +9,8 @@ const DEFAULT = {
   muted: false,
   shake: true,
   music: true,
+  autoAttack: true,
+  autoCast: true,
   bestiary: {}, // monsterId → kill count
   achievements: {}, // id → true
 };
@@ -38,8 +40,12 @@ export const Save = {
   setMuted(m) { state.muted = m; persist(); },
   get shake() { return state.shake; },
   get music() { return state.music; },
+  get autoAttack() { return state.autoAttack; },
+  get autoCast() { return state.autoCast; },
   setShake(s) { state.shake = s; persist(); },
   setMusic(m) { state.music = m; persist(); },
+  setAutoAttack(v) { state.autoAttack = v; persist(); },
+  setAutoCast(v) { state.autoCast = v; persist(); },
 
   recordScore(score, stageIndex) {
     let best = false;

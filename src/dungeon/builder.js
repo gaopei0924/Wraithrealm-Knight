@@ -20,16 +20,24 @@ const DEFAULT_WALLS = [
   ['wall_arched', 10],
 ];
 
+// [name, weight, solid?] — a rich furniture/decor pool so rooms feel furnished.
 const EDGE_PROPS = [
-  ['barrel_large', 18, true],
-  ['box_large', 16, true],
-  ['crates_stacked', 12, true],
-  ['barrel_small_stack', 14, true],
-  ['keg', 10, true],
-  ['table_medium_broken', 8, true],
-  ['rubble_half', 10, false],
-  ['coin_stack_small', 6, false],
-  ['bottle_A_brown', 6, false],
+  ['barrel_large', 12, true], ['barrel_large_decorated', 7, true], ['barrel_small', 7, true],
+  ['box_large', 10, true], ['box_small', 7, true], ['box_small_decorated', 5, true],
+  ['crates_stacked', 9, true], ['keg', 7, true], ['keg_decorated', 5, true],
+  ['table_medium', 7, true], ['table_medium_broken', 5, true], ['table_small', 7, true],
+  ['table_long', 5, true], ['shelf_large', 7, true], ['shelf_small', 7, true], ['shelves', 5, true],
+  ['chair', 5, false], ['stool', 5, false], ['bed_frame', 4, true], ['bed_decorated', 4, true],
+  ['trunk_large_A', 5, true], ['trunk_medium_A', 5, true],
+  ['rubble_half', 7, false], ['rubble_large', 4, true],
+  ['coin_stack_small', 4, false], ['coin_stack_medium', 3, false],
+  ['bottle_A_brown', 4, false], ['candle_lit', 4, false], ['candle_triple', 3, false],
+  ['plate_stack', 3, false], ['sword_shield', 4, false], ['sword_shield_gold', 2, false],
+];
+
+const BANNERS = [
+  'banner_patternA_red', 'banner_shield_red', 'banner_blue', 'banner_green',
+  'banner_yellow', 'banner_white', 'banner_thin_red', 'banner_triple_green',
 ];
 
 function pickWeighted(rand, options) {
@@ -85,8 +93,8 @@ export class DungeonBuilder {
       ...this.floorVariants.map((v) => v[0]),
       ...this.wallVariants.map((v) => v[0]),
       ...EDGE_PROPS.map((v) => v[0]),
-      'wall_gated', 'wall_doorway', 'pillar', 'torch_mounted',
-      'banner_patternA_red', 'banner_shield_red', 'chest_gold', 'wall_corner_small',
+      ...BANNERS,
+      'wall_gated', 'wall_doorway', 'pillar', 'torch_mounted', 'chest_gold', 'wall_corner_small',
     ];
     await this.assets.resolveTiles([...new Set(names)]);
 
@@ -195,7 +203,7 @@ export class DungeonBuilder {
       } else if (rand() < 0.08) {
         const [cx, cz] = this.cellCenter(wall.x, wall.z);
         const [dx, dz] = DIR_VEC[wall.dir];
-        const banner = this.assets.tileSync(rand() < 0.5 ? 'banner_patternA_red' : 'banner_shield_red');
+        const banner = this.assets.tileSync(BANNERS[Math.floor(rand() * BANNERS.length)]);
         banner.position.set(cx + dx * (this.G / 2 - 0.25), 3.6, cz + dz * (this.G / 2 - 0.25));
         banner.rotation.y = DIR_ROT[wall.dir] + Math.PI;
         this.group.add(banner);

@@ -114,14 +114,15 @@ export function requestFullscreenOnFirstGesture() {
   document.addEventListener('pointerdown', once, { once: true });
 }
 
-// Show/hide a "please rotate" overlay when a touch device is held in portrait.
-export function watchOrientation(promptEl) {
-  if (!isTouchDevice()) return;
+// The game now plays in BOTH orientations. We no longer nag the user to rotate;
+// instead we tag <body> with .portrait so the HUD + camera adapt. Works on every
+// device (also helps when mobile fullscreen/landscape-lock isn't available).
+export function watchOrientation() {
   const check = () => {
-    const portrait = window.innerHeight > window.innerWidth;
-    promptEl.classList.toggle('hidden', !portrait);
+    const portrait = window.innerHeight >= window.innerWidth;
+    document.body.classList.toggle('portrait', portrait);
   };
   window.addEventListener('resize', check);
-  window.addEventListener('orientationchange', check);
+  window.addEventListener('orientationchange', () => setTimeout(check, 200));
   check();
 }

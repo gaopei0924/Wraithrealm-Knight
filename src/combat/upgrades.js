@@ -62,6 +62,73 @@ export const UPGRADE_POOL = [
     desc: '致命傷害時復活一次（40% 生命）',
     apply: (p) => { p.reviveCharges = (p.reviveCharges ?? 0) + 1; },
   },
+  // --- survivors-style passive weapons (stack to level up) ---
+  {
+    id: 'orbit', icon: 'whirlwind', name: '旋刃環繞',
+    desc: '召喚旋轉刀刃環繞自身，自動切割敵人',
+    apply: (p) => { p.weapons.orbit += 1; },
+  },
+  {
+    id: 'aura', icon: 'fireball', name: '灼炎光環',
+    desc: '身周持續灼燒附近敵人',
+    apply: (p) => { p.weapons.aura += 1; },
+  },
+  {
+    id: 'frost_aura', icon: 'frost', name: '凜霜領域',
+    desc: '減速接近你的所有敵人',
+    apply: (p) => { p.weapons.frost += 1; },
+  },
+  {
+    id: 'thorns', icon: 'shield', name: '荊棘反傷',
+    desc: '受到近戰攻擊時反彈傷害',
+    apply: (p) => { p.weapons.thorns += 1; },
+  },
+  // --- survivors-style stats ---
+  {
+    id: 'regen', icon: 'heal', name: '生命再生',
+    desc: '每秒回復 3 點生命',
+    apply: (p) => { p.stats.regen += 3; },
+  },
+  {
+    id: 'armor', icon: 'shield', name: '堅甲',
+    desc: '受到的傷害 -8%',
+    apply: (p) => { p.stats.armor = Math.min(0.7, p.stats.armor + 0.08); },
+  },
+  {
+    id: 'dodge', icon: 'dash', name: '身法',
+    desc: '閃避率 +6%（完全閃避一次攻擊）',
+    apply: (p) => { p.stats.dodgeChance = Math.min(0.5, p.stats.dodgeChance + 0.06); },
+  },
+  {
+    id: 'cdr', icon: 'up_mana', name: '急速冷卻',
+    desc: '技能冷卻 -12%',
+    apply: (p) => { p.stats.cdr *= 0.88; },
+  },
+  {
+    id: 'atkspeed', icon: 'up_finisher', name: '疾擊',
+    desc: '攻擊速度 +12%',
+    apply: (p) => { p.stats.atkSpeed *= 1.12; },
+  },
+  {
+    id: 'maxmp', icon: 'up_mana', name: '法力之泉',
+    desc: '最大法力 +25，並回滿',
+    apply: (p) => { p.stats.maxMp += 25; p.mp = p.stats.maxMp; },
+  },
+  {
+    id: 'greed', icon: 'potion', name: '貪婪',
+    desc: '金幣獲取 +30%',
+    apply: (p) => { p.stats.goldMult *= 1.3; },
+  },
+  {
+    id: 'berserk', icon: 'bloodlust', name: '狂戰之怒',
+    desc: '生命低於 35% 時傷害 +40%',
+    apply: (p) => { p.stats.berserk += 0.4; },
+  },
+  {
+    id: 'magnet', icon: 'up_wisdom', name: '磁吸力場',
+    desc: '更快吸取經驗與掉落物',
+    apply: (p) => { p.stats.magnet *= 1.4; },
+  },
 ];
 
 export function rollUpgradeChoices(count = 3) {
