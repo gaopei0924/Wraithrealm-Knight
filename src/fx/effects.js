@@ -22,6 +22,7 @@ export class Effects {
     this.orbMat = new THREE.MeshBasicMaterial({ color: 0x66ddff });
     this.boltGeo = new THREE.SphereGeometry(0.22, 8, 8);
     this.boltMat = new THREE.MeshBasicMaterial({ color: 0x8844ff });
+    this.playerBoltGeo = new THREE.SphereGeometry(0.32, 10, 10);
   }
 
   slashArc(origin, facing, range, arcAngle, color = 0xffc878) {
@@ -124,12 +125,15 @@ export class Effects {
 
   fireBolt(from, target, spec = {}) {
     const color = spec.color ?? 0x8844ff;
-    const mesh = new THREE.Mesh(this.boltGeo, this.boltMat.clone());
-    mesh.material.color.setHex(color);
+    // Additive unlit material reads as a glow without a real PointLight —
+    // adding/removing scene lights forces a full shader recompile (frame hitch).
+    const mat = this.boltMat.clone();
+    mat.color.setHex(color);
+    mat.transparent = true;
+    mat.blending = THREE.AdditiveBlending;
+    const mesh = new THREE.Mesh(this.boltGeo, mat);
     mesh.position.copy(from).setY(1.4);
     const dir = new THREE.Vector3().subVectors(target, from).setY(0).normalize();
-    const light = new THREE.PointLight(color, 6, 5);
-    mesh.add(light);
     this.scene.add(mesh);
     this.bolts.push({
       mesh, dir, speed: spec.speed ?? 9, age: 0,
@@ -204,15 +208,11 @@ export class Effects {
     this.items.push({ mesh, update: (dt) => { t += dt; mat.opacity = Math.max(0, 0.4 - t * 2); return t < 0.2; } });
   }
 
-  // Generic impact burst (boss attacks, explosions).
+  // Generic impact burst (boss attacks, explosions). No scene light — the
+  // additive ring + sparks read as a flash without forcing a shader recompile.
   burst(pos, radius, color = 0xffa040) {
     this.ringBurst(pos, radius, color);
     this.hitSpark(pos);
-    const light = new THREE.PointLight(color, 14, radius * 2.5);
-    light.position.copy(pos).setY(1.2);
-    this.scene.add(light);
-    let t = 0;
-    this.items.push({ mesh: light, update: (dt) => { t += dt; light.intensity = Math.max(0, 14 - t * 50); return t < 0.3; } });
   }
 
   // --- pickups (health / mana / gold) dropped by enemies & destructibles ---
@@ -223,8 +223,6 @@ export class Effects {
     mesh.scale.setScalar(kind === 'gold' ? 0.9 : 1.25);
     mesh.position.copy(pos).setY(0.7);
     const drift = new THREE.Vector3((Math.random() - 0.5) * 2.5, 0, (Math.random() - 0.5) * 2.5);
-    const light = new THREE.PointLight(colors[kind] ?? 0xffffff, 3, 3);
-    mesh.add(light);
     this.scene.add(mesh);
     this.pickups = this.pickups ?? [];
     this.pickups.push({ mesh, kind, age: 0, drift });
@@ -252,13 +250,12 @@ export class Effects {
   // Player skill projectile (fireball). Travels straight; explodes on the
   // first enemy it reaches or at end of life. onExplode(pos, effect) handles AoE.
   firePlayerBolt(from, facing, effect) {
-    const geo = new THREE.SphereGeometry(0.32, 10, 10);
-    const mat = new THREE.MeshBasicMaterial({ color: effect.color ?? 0xff7a22 });
-    const mesh = new THREE.Mesh(geo, mat);
+    const mat = new THREE.MeshBasicMaterial({
+      color: effect.color ?? 0xff7a22, transparent: true, blending: THREE.AdditiveBlending,
+    });
+    const mesh = new THREE.Mesh(this.playerBoltGeo, mat);
     mesh.position.copy(from).setY(1.3);
     const dir = new THREE.Vector3(Math.sin(facing), 0, Math.cos(facing)).normalize();
-    const light = new THREE.PointLight(effect.color ?? 0xff7a22, 10, 7);
-    mesh.add(light);
     this.scene.add(mesh);
     this.playerBolts.push({ mesh, dir, effect, age: 0 });
   }
@@ -307,13 +304,15 @@ export class Effects {
     });
     const line = new THREE.Line(geo, mat);
     this.scene.add(line);
-    // a glow node at each struck point
+    // a glow spark at each struck point (additive sprite — no scene light)
     for (const p of points.slice(1)) {
-      const glow = new THREE.PointLight(color, 8, 4);
-      glow.position.set(p.x, 1.4, p.z);
+      const sm = new THREE.MeshBasicMaterial({ color, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false });
+      const glow = new THREE.Mesh(this.sparkGeo, sm);
+      glow.scale.setScalar(3);
+      glow.position.set(p.x, 1.2, p.z);
       this.scene.add(glow);
       let gt = 0;
-      this.items.push({ mesh: glow, update: (dt) => { gt += dt; glow.intensity = Math.max(0, 8 - gt * 40); return gt < 0.2; } });
+      this.items.push({ mesh: glow, update: (dt) => { gt += dt; sm.opacity = Math.max(0, 1 - gt * 5); return gt < 0.2; } });
     }
     let t = 0;
     this.items.push({
