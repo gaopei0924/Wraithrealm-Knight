@@ -100,11 +100,17 @@ export class Enemy {
     this.type = type;
     this.elite = opts.elite ?? false;
     const base = ENEMY_TYPES[type] ?? opts.def;
+    // Regular monsters (in ENEMY_TYPES) get the global tuning: HP ×5, DMG ×2, and
+    // +50 HP per wave reached. Bosses (built from opts.def) are excluded.
+    const isMonster = !!ENEMY_TYPES[type];
+    const HP_MULT = isMonster ? 5 : 1;
+    const DMG_MULT = isMonster ? 2 : 1;
+    const waveHp = isMonster ? (opts.waveHp ?? 0) : 0;
     const eliteMul = this.elite ? { hp: 2.4, dmg: 1.5, xp: 3, scale: 1.25 } : { hp: 1, dmg: 1, xp: 1, scale: 1 };
     this.def = {
       ...base,
-      hp: Math.round(base.hp * mods.hp * eliteMul.hp),
-      damage: +(base.damage * mods.damage * eliteMul.dmg).toFixed(1),
+      hp: Math.round(base.hp * mods.hp * eliteMul.hp * HP_MULT + waveHp),
+      damage: +(base.damage * mods.damage * eliteMul.dmg * DMG_MULT).toFixed(1),
       speed: base.speed * mods.speed,
       xp: Math.round(base.xp * eliteMul.xp),
       scale: base.scale * eliteMul.scale,

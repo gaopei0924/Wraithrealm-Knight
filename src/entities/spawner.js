@@ -63,7 +63,7 @@ export class WaveDirector {
     this.pendingSpawns = this.pendingSpawns.filter((spawn) => {
       if (now >= spawn.at) {
         const affix = spawn.elite ? ELITE_AFFIXES[Math.floor(Math.random() * ELITE_AFFIXES.length)] : null;
-        this.spawnEnemy(spawn.type, spawn.x, spawn.z, player, { elite: spawn.elite, affix });
+        this.spawnEnemy(spawn.type, spawn.x, spawn.z, player, { elite: spawn.elite, affix, waveHp: 50 * Math.max(0, (spawn.wave ?? 1) - 1) });
         return false;
       }
       return true;
@@ -117,7 +117,7 @@ export class WaveDirector {
       const type = wave.types[i % wave.types.length];
       const { x, z } = this.pickSpawnPoint(room, player);
       const elite = this.eliteChance > 0 && Math.random() < this.eliteChance;
-      this.pendingSpawns.push({ type, x, z, elite, at: performance.now() + 250 + i * 300 });
+      this.pendingSpawns.push({ type, x, z, elite, wave: this.globalWave, at: performance.now() + 250 + i * 300 });
     }
   }
 
@@ -223,6 +223,42 @@ export class WaveDirector {
       this.sfx.gate();
       this.events.onRoomCleared?.(room);
       if (this.rooms.every((r) => !r.waves || r.cleared)) this.events.onAllCleared?.();
+    }
+  }
+
+  // Push overlapping enemies apart so they don't clip into each other (穿模).
+  // Cheap O(n²) over the small live set; movement still respects walls via the
+  // character controller.
+  separate() {
+    const list = this.aliveEnemies;
+    for (let i = 0; i < list.length; i++) {
+      const a = list[i];
+      if (a.isBoss || a.dead) continue;
+      let px = 0, pz = 0;
+      for (let j = 0; j < list.length; j++) {
+        if (i === j) continue;
+        const b = list[j];
+        const dx = a.position.x - b.position.x, dz = a.position.z - b.position.z;
+        const min = a.def.radius + b.def.radius;
+        const d2 = dx * dx + dz * dz;
+        if (d2 >= min * min) continue;
+        if (d2 < 1e-4) {
+          // exact overlap: deterministic jitter so coincident bodies can split
+          const ang = a.id * 2.3994;
+          px += Math.cos(ang) * min; pz += Math.sin(ang) * min;
+        } else {
+          const d = Math.sqrt(d2);
+          const push = (min - d) / d;
+          px += dx * push; pz += dz * push;
+        }
+      }
+      if (px !== 0 || pz !== 0) {
+        // clamp the per-frame shove so dense piles ease apart rather than teleport
+        let sx = px * 0.5, sz = pz * 0.5;
+        const mag = Math.hypot(sx, sz), cap = 0.4;
+        if (mag > cap) { sx = sx / mag * cap; sz = sz / mag * cap; }
+        this.physics.shoveActor(a.actor, sx, sz);
+      }
     }
   }
 

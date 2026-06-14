@@ -48,6 +48,14 @@ export class Physics {
     return next;
   }
 
+  // Directly offset a kinematic actor (depenetration / separation). Bypasses the
+  // character controller — used to push overlapping actors apart, which the
+  // controller can't do since each blocks the other.
+  shoveActor(actor, dx, dz) {
+    const p = actor.body.translation();
+    actor.body.setTranslation({ x: p.x + dx, y: p.y, z: p.z + dz }, true);
+  }
+
   step() {
     this.world.step();
   }

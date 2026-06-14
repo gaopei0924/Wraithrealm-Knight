@@ -577,7 +577,7 @@ class Game {
     return [
       { id: 'heal', icon: 'potion', name: '治療', desc: '回滿生命', cost: 30, apply: (p) => { p.hp = p.stats.maxHp; } },
       { id: 'maxhp', icon: 'up_vitality', name: '強健', desc: '最大生命 +30', cost: 60, apply: (p) => { p.stats.maxHp += 30; p.hp += 30; } },
-      { id: 'dmg', icon: 'up_blade', name: '鋒利', desc: '傷害 +12%', cost: 70, apply: (p) => { p.stats.damageMult *= 1.12; } },
+      { id: 'dmg', icon: 'up_blade', name: '鋒利', desc: '傷害 +5%', cost: 70, apply: (p) => { p.stats.damageMult *= 1.05; } },
       { id: 'potion', icon: 'potion', name: '藥水 x3', desc: '補滿藥水', cost: 40, apply: (p) => { p.potions = 6; } },
     ];
   }
@@ -650,6 +650,7 @@ class Game {
       this.sfx.swing();
     });
     this.physics.step();
+    director.separate(); // push overlapping monsters apart (no clipping)
     player.syncFromPhysics();
     for (const enemy of director.enemies) {
       if (!enemy.dead) enemy.syncFromPhysics();
@@ -744,9 +745,16 @@ class Game {
       if (this.auraTimer <= 0) {
         this.auraTimer = 0.5;
         const r = this.fx.auraRadius ?? 3;
-        const dmg = (5 + p.weapons.aura * 4) * 0.25 * p.damageMult;
+        // base aura damage: previous tuning (×0.25) then a further −80% (×0.2).
+        const base = (5 + p.weapons.aura * 4) * 0.25 * 0.2 * p.damageMult;
         for (const e of d.aliveEnemies) {
-          if (e.position.distanceTo(p.position) <= r + e.def.radius) this.applyDamage(e, dmg, p.position, 1, false, 'burn');
+          if (e.position.distanceTo(p.position) <= r + e.def.radius) {
+            // consecutive burn ramps: each tick stacks +1% damage (capped).
+            e._burnStacks = Math.min(200, (e._burnStacks ?? 0) + 1);
+            this.applyDamage(e, base * (1 + 0.01 * e._burnStacks), p.position, 1, false, 'burn');
+          } else {
+            e._burnStacks = 0; // leaving the aura resets the ramp
+          }
         }
       }
     }
