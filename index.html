@@ -70,10 +70,12 @@
     <!-- gold counter (above the action cluster) -->
     <div id="gold-line">金幣 <span id="gold-count">0</span></div>
 
-    <!-- fullscreen + pause + help toggles (top) -->
+    <!-- desktop: fullscreen + pause + help toggles (top) -->
     <button id="fullscreen-btn" title="全螢幕"></button>
     <button id="pause-btn" title="暫停 (Esc)">❘❘</button>
     <button id="help-btn" title="操作說明">？</button>
+    <!-- mobile: one big corner menu button (opens pause, which has everything) -->
+    <button id="menu-btn" class="touch-only" title="選單">☰</button>
   </div>
 
   <!-- left-half touch surface that drives the joystick (mobile only) -->
@@ -119,8 +121,10 @@
     <label class="toggle-row"><input type="checkbox" id="toggle-mute" /> 靜音</label>
     <label class="toggle-row"><input type="checkbox" id="toggle-music" checked /> 背景音樂</label>
     <button id="resume-btn" class="menu-btn">繼續遊戲</button>
+    <button id="pause-fs-btn" class="menu-btn">切換全螢幕</button>
     <button id="pause-help-btn" class="menu-btn">操作說明</button>
     <button id="pause-restart-btn" class="menu-btn">重新開始</button>
+    <div id="ios-fs-hint" class="hidden">iOS 無法網頁全螢幕，請用 Safari「分享 → 加入主畫面」以全螢幕遊玩</div>
   </div>
 
   <!-- between-stage shop -->

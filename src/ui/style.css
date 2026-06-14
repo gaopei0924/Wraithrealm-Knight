@@ -309,9 +309,21 @@ body.touch #touch-move-zone { pointer-events: auto; }
 /* ---------- overlays ---------- */
 .overlay {
   position: fixed; inset: 0; z-index: 40;
-  background: rgba(2, 1, 0, 0.78);
+  background: rgba(2, 1, 0, 0.85);
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   gap: 18px; color: #e8dcc0;
+  overflow-y: auto; -webkit-overflow-scrolling: touch;
+  padding: 20px 12px;
+}
+/* Short screens (mobile landscape): start from the top so nothing is clipped,
+   and the user can scroll to every button. */
+@media (max-height: 540px) {
+  .overlay { justify-content: flex-start; gap: 10px; padding: 12px 10px 28px; }
+  .overlay-title { font-size: 30px !important; letter-spacing: 8px !important; }
+  .overlay-sub { font-size: 13px !important; letter-spacing: 3px !important; }
+  .menu-btn { margin-top: 4px; padding: 9px 30px; font-size: 16px; }
+  .toggle-row { font-size: 13px; }
+  #volume-slider { max-width: 280px; }
 }
 .overlay-title {
   font-size: 52px; letter-spacing: 18px; color: var(--gold);
@@ -474,6 +486,8 @@ body.touch #touch-move-zone { pointer-events: auto; }
   #status-panel { left: calc(18px + env(safe-area-inset-left)); }
   #top-right { right: calc(18px + env(safe-area-inset-right)); }
   #action-cluster { right: calc(18px + env(safe-area-inset-right)); }
+  #menu-btn { right: calc(8px + env(safe-area-inset-right)); top: calc(8px + env(safe-area-inset-top)); }
+  #joystick { left: calc(44px + env(safe-area-inset-left)); }
 }
 
 /* ===================== expansion: bosses, status, meta UI ===================== */
@@ -618,3 +632,27 @@ body.touch #touch-move-zone { pointer-events: auto; }
   #help-btn { margin-left: 188px; width: 30px; height: 30px; font-size: 14px; }
   #toast-layer { top: 56px; }
 }
+
+/* ===================== mobile control consolidation ===================== */
+/* One big corner menu button on touch devices; the three tiny top icons hide. */
+#menu-btn {
+  position: absolute; top: 8px; right: 8px; width: 46px; height: 46px;
+  pointer-events: auto; z-index: 12;
+  background: rgba(12,9,6,0.72); border: 1px solid var(--gold-dim); border-radius: 6px;
+  color: var(--gold); font-size: 24px; line-height: 1; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.6);
+}
+#menu-btn:active { transform: scale(0.92); }
+body.touch #fullscreen-btn, body.touch #pause-btn, body.touch #help-btn { display: none; }
+/* push the top-right info column below the corner menu button on mobile */
+body.touch #top-right { top: 62px; }
+
+#ios-fs-hint {
+  max-width: 320px; font-size: 12px; color: #b8a987; letter-spacing: 1px;
+  line-height: 1.5; text-align: center; margin-top: 4px;
+}
+
+/* generous touch targets for overlay buttons on touch devices */
+body.touch .menu-btn { min-width: 200px; padding: 14px 30px; }
+body.touch #help-close, body.touch #shop-done, body.touch #restart-btn { min-height: 48px; }

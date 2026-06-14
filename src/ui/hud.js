@@ -54,14 +54,21 @@ export class Hud {
 
   // --- pause menu + settings ---
   wireMenu(cfg) {
-    const { onToggle, onResume, onRestart, onVolume, volume, onHelp,
-      onShake, onMute, onMusic, shake = true, muted = false, music = true } = cfg;
+    const { onToggle, onResume, onRestart, onVolume, volume, onHelp, onFullscreen,
+      onShake, onMute, onMusic, shake = true, muted = false, music = true, fsAvailable = true } = cfg;
     $('pause-btn').addEventListener('click', () => onToggle());
+    $('menu-btn').addEventListener('click', () => onToggle());
     $('resume-btn').addEventListener('click', () => onResume());
     $('pause-restart-btn').addEventListener('click', () => onRestart());
     $('help-btn').addEventListener('click', () => onHelp());
     $('pause-help-btn').addEventListener('click', () => onHelp());
+    $('pause-fs-btn').addEventListener('click', () => onFullscreen());
     $('help-close').addEventListener('click', () => this.hideHelp());
+    // iOS has no Fullscreen API — hide the toggle and show the home-screen hint.
+    if (!fsAvailable) {
+      $('pause-fs-btn').classList.add('hidden');
+      $('ios-fs-hint').classList.remove('hidden');
+    }
     const slider = $('volume-slider');
     slider.value = Math.round((volume ?? 0.35) * 100);
     slider.addEventListener('input', () => onVolume(slider.value / 100));

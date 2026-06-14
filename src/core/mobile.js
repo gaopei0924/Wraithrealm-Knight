@@ -17,11 +17,13 @@ export function suppressBrowserGestures() {
   document.addEventListener('gesturechange', stop, { passive: false });
   document.addEventListener('dblclick', stop, { passive: false });
 
-  // Block scroll / pull-to-refresh everywhere except inside scrollable overlays.
+  // Block scroll / pull-to-refresh everywhere except inside scrollable overlays
+  // (any .overlay or anything tagged .allow-scroll) — otherwise menus that
+  // overflow a short landscape screen can't be scrolled to their buttons.
   document.addEventListener(
     'touchmove',
     (e) => {
-      if (!e.target.closest('.allow-scroll')) e.preventDefault();
+      if (!e.target.closest('.allow-scroll, .overlay')) e.preventDefault();
     },
     { passive: false },
   );

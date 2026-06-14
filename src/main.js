@@ -79,10 +79,12 @@ class Game {
       onRestart: () => window.location.reload(),
       onVolume: (v) => { Save.setVolume(v); this.sfx.setVolume(v); },
       onHelp: () => this.hud.showHelp(this.player?.loadout ?? []),
+      onFullscreen: () => { if (isFullscreen()) exitFullscreen(); else enterFullscreen(); },
       onShake: (on) => { Save.setShake(on); this.engine.shakeEnabled = on; },
       onMute: (m) => { Save.setMuted(m); this.sfx.setMuted(m); },
       onMusic: (on) => { Save.setMusic(on); if (on) this.sfx.startMusic(); else this.sfx.stopMusic(); },
       volume: Save.volume, shake: Save.shake, muted: Save.muted, music: Save.music,
+      fsAvailable: !!document.documentElement.requestFullscreen,
     });
     this.engine.shakeEnabled = Save.shake;
 
