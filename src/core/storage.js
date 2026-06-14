@@ -7,6 +7,8 @@ const DEFAULT = {
   bestStage: 0,
   volume: 0.35,
   muted: false,
+  shake: true,
+  music: true,
   bestiary: {}, // monsterId → kill count
   achievements: {}, // id → true
 };
@@ -34,6 +36,10 @@ export const Save = {
 
   setVolume(v) { state.volume = v; persist(); },
   setMuted(m) { state.muted = m; persist(); },
+  get shake() { return state.shake; },
+  get music() { return state.music; },
+  setShake(s) { state.shake = s; persist(); },
+  setMusic(m) { state.music = m; persist(); },
 
   recordScore(score, stageIndex) {
     let best = false;

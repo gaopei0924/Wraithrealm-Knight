@@ -12,9 +12,10 @@
 //
 // All animation names exist in the KayKit Knight rig.
 
-// Slot → keyboard key. Slots beyond this fall back to no key (button only).
-export const SKILL_KEYS = ['KeyK', 'KeyL', 'KeyU', 'KeyI', 'KeyO', 'KeyP', 'KeyH', 'KeyN'];
-export const SKILL_KEY_LABELS = ['K', 'L', 'U', 'I', 'O', 'P', 'H', 'N'];
+// Slot → keyboard key. Skills sit on the number row (1-8): an intuitive ability
+// bar, and every equipped skill always has a visible, usable key.
+export const SKILL_KEYS = ['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6', 'Digit7', 'Digit8'];
+export const SKILL_KEY_LABELS = ['1', '2', '3', '4', '5', '6', '7', '8'];
 
 export const SKILLS = {
   whirlwind: {

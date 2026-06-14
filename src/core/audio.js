@@ -11,6 +11,59 @@ export class Sfx {
     this.master = this.ctx.createGain();
     this.master.gain.value = 0.35;
     this.master.connect(this.ctx.destination);
+    this.volume = 0.35;
+    this.muted = false;
+    this.musicNodes = null;
+  }
+
+  // Slow, dark ambient drone built from detuned low oscillators under a
+  // wandering low-pass — atmosphere without any audio files.
+  startMusic() {
+    this.ensure();
+    if (this.musicNodes) return;
+    const ctx = this.ctx;
+    const bus = ctx.createGain();
+    bus.gain.value = 0.18;
+    bus.connect(this.master);
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.value = 380;
+    filter.Q.value = 6;
+    filter.connect(bus);
+    const oscs = [];
+    for (const f of [55, 82.5, 110, 164.8]) {
+      const o = ctx.createOscillator();
+      o.type = 'sawtooth';
+      o.frequency.value = f;
+      o.detune.value = (Math.random() - 0.5) * 14;
+      const g = ctx.createGain();
+      g.gain.value = 0.22;
+      o.connect(g).connect(filter);
+      o.start();
+      oscs.push(o);
+    }
+    // wandering filter LFO
+    const lfo = ctx.createOscillator();
+    lfo.frequency.value = 0.05;
+    const lfoGain = ctx.createGain();
+    lfoGain.gain.value = 220;
+    lfo.connect(lfoGain).connect(filter.frequency);
+    lfo.start();
+    this.musicNodes = { bus, oscs, lfo };
+  }
+
+  stopMusic() {
+    if (!this.musicNodes) return;
+    try {
+      this.musicNodes.oscs.forEach((o) => o.stop());
+      this.musicNodes.lfo.stop();
+      this.musicNodes.bus.disconnect();
+    } catch { /* ignore */ }
+    this.musicNodes = null;
+  }
+
+  applyGain() {
+    if (this.master) this.master.gain.value = this.muted ? 0 : this.volume;
   }
 
   noise(duration, { freq = 1200, type = 'bandpass', gain = 0.5, decay = 12 } = {}) {
@@ -72,5 +125,6 @@ export class Sfx {
   }
   bossHit() { this.noise(0.2, { freq: 260, type: 'lowpass', gain: 0.8, decay: 6 }); this.tone(110, 0.2, { type: 'square', gain: 0.18, slide: -60 }); }
   telegraph() { this.tone(300, 0.25, { type: 'triangle', gain: 0.08, slide: 120 }); }
-  setVolume(v) { this.ensure(); if (this.master) this.master.gain.value = v; }
+  setVolume(v) { this.ensure(); this.volume = v; this.applyGain(); }
+  setMuted(m) { this.ensure(); this.muted = m; this.applyGain(); }
 }

@@ -571,3 +571,50 @@ body.touch #touch-move-zone { pointer-events: auto; }
   #pause-btn { margin-left: 150px; width: 30px; height: 30px; }
   #score-line, #combo-line { font-size: 12px; }
 }
+
+/* ===================== help overlay, toasts, settings toggles ===================== */
+#help-btn {
+  position: absolute; top: 16px; left: 50%; transform: translateX(-50%);
+  margin-left: 240px; width: 36px; height: 36px; pointer-events: auto;
+  background: rgba(12,9,6,0.6); border: 1px solid var(--edge); border-radius: 4px;
+  color: #c9a35c; font-size: 17px; cursor: pointer; line-height: 1;
+  display: flex; align-items: center; justify-content: center;
+}
+#help-btn:hover { border-color: var(--gold); color: #f0e2bb; }
+
+#help-body { width: min(420px, 88vw); margin: 6px 0 4px; }
+.help-grid { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+.help-row { display: flex; align-items: center; gap: 12px; font-size: 14px; color: #cbbd9d; letter-spacing: 1px; }
+.help-key {
+  min-width: 92px; text-align: center; color: var(--gold);
+  border: 1px solid var(--gold-dim); border-radius: 4px; padding: 3px 6px;
+  font-size: 12px; background: rgba(20,15,8,0.6);
+}
+.help-sub { font-size: 13px; color: var(--gold); letter-spacing: 3px; margin: 8px 0 8px; }
+
+.toggle-row {
+  display: flex; align-items: center; gap: 8px; font-size: 15px; color: #cbbd9d;
+  letter-spacing: 2px; pointer-events: auto; cursor: pointer;
+}
+.toggle-row input { width: 18px; height: 18px; accent-color: var(--gold); }
+
+/* achievement toasts */
+#toast-layer {
+  position: fixed; top: 76px; left: 50%; transform: translateX(-50%);
+  z-index: 45; display: flex; flex-direction: column; gap: 8px; align-items: center; pointer-events: none;
+}
+.toast {
+  min-width: 220px; max-width: 80vw; text-align: center;
+  background: linear-gradient(#2a200f, #100b05);
+  border: 1px solid var(--gold); border-radius: 5px; padding: 10px 22px;
+  box-shadow: 0 6px 22px rgba(0,0,0,0.7), 0 0 18px rgba(201,163,92,0.3);
+  opacity: 0; transform: translateY(-12px); transition: opacity 0.35s, transform 0.35s;
+}
+.toast.show { opacity: 1; transform: translateY(0); }
+.toast-title { color: var(--gold); font-size: 16px; letter-spacing: 3px; }
+.toast-sub { color: #b8a987; font-size: 12px; letter-spacing: 1px; margin-top: 2px; }
+
+@media (max-width: 900px), (max-height: 560px) {
+  #help-btn { margin-left: 188px; width: 30px; height: 30px; font-size: 14px; }
+  #toast-layer { top: 56px; }
+}

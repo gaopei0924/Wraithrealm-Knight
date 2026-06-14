@@ -70,9 +70,10 @@
     <!-- gold counter (above the action cluster) -->
     <div id="gold-line">金幣 <span id="gold-count">0</span></div>
 
-    <!-- fullscreen + pause toggles (top) -->
+    <!-- fullscreen + pause + help toggles (top) -->
     <button id="fullscreen-btn" title="全螢幕"></button>
     <button id="pause-btn" title="暫停 (Esc)">❘❘</button>
+    <button id="help-btn" title="操作說明">？</button>
   </div>
 
   <!-- left-half touch surface that drives the joystick (mobile only) -->
@@ -96,6 +97,16 @@
     <div id="skill-cards"></div>
   </div>
 
+  <!-- controls / help -->
+  <div id="help-overlay" class="overlay hidden">
+    <div class="overlay-title">操作說明</div>
+    <div id="help-body"></div>
+    <button id="help-close" class="menu-btn">關閉</button>
+  </div>
+
+  <!-- achievement toast stack -->
+  <div id="toast-layer"></div>
+
   <!-- pause menu -->
   <div id="pause-overlay" class="overlay hidden">
     <div class="overlay-title">暫停</div>
@@ -104,7 +115,11 @@
       <div class="setup-label">音量</div>
       <input id="volume-slider" type="range" min="0" max="100" value="35" />
     </div>
+    <label class="toggle-row"><input type="checkbox" id="toggle-shake" checked /> 畫面震動</label>
+    <label class="toggle-row"><input type="checkbox" id="toggle-mute" /> 靜音</label>
+    <label class="toggle-row"><input type="checkbox" id="toggle-music" checked /> 背景音樂</label>
     <button id="resume-btn" class="menu-btn">繼續遊戲</button>
+    <button id="pause-help-btn" class="menu-btn">操作說明</button>
     <button id="pause-restart-btn" class="menu-btn">重新開始</button>
   </div>
 
@@ -145,8 +160,8 @@
       <div id="start-note">點擊後自動全螢幕 · 隨時可按右上 ⛶ 或 F11 切換 · Esc 退出</div>
     </div>
 
-    <div id="loading-hint" class="desktop-only">WASD 移動 · J/左鍵 攻擊（三連擊） · Space/右鍵 翻滾（無敵幀） · K / L 技能 · Q 藥水</div>
-    <div id="loading-hint-mobile" class="touch-only">左側拖曳 移動 · 右側按鍵 攻擊/技能/翻滾 · 建議橫向全螢幕</div>
+    <div id="loading-hint" class="desktop-only">WASD 移動 · J/左鍵 攻擊（三連擊） · Space/右鍵 翻滾（無敵幀） · 數字鍵 1~8 施放技能 · Q 藥水</div>
+    <div id="loading-hint-mobile" class="touch-only">左側拖曳 移動 · 下方技能列點擊施放 · 右側按鍵 攻擊/翻滾/藥水 · 建議橫向全螢幕</div>
   </div>
 
   <!-- rotate-to-landscape prompt (mobile portrait only) -->

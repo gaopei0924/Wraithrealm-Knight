@@ -16,6 +16,7 @@ import { rollUpgradeChoices } from './combat/upgrades.js';
 import { DIFFICULTIES, enemyMods, buildWavePlans } from './combat/difficulty.js';
 import { SLOTS_PER_MILESTONE } from './combat/skills.js';
 import { BOSSES } from './combat/bosses.js';
+import { Achievements } from './combat/achievements.js';
 import { ENEMY_TYPES } from './entities/enemy.js';
 import { Hud } from './ui/hud.js';
 import { icon } from './ui/icons.js';
@@ -47,6 +48,8 @@ class Game {
     this.bestCombo = 0;
     this.runStart = 0;
     this.bossRef = null;
+    this.bossKills = 0;
+    this.damageDealt = 0;
 
     fitViewport(() => this.engine.onResize());
     if (isTouchDevice()) {
@@ -68,13 +71,20 @@ class Game {
 
     // Pause on Escape / pause button.
     window.addEventListener('keydown', (e) => { if (e.code === 'Escape') this.togglePause(); });
+    // Auto-pause when the tab is hidden (switched away / minimised).
+    document.addEventListener('visibilitychange', () => { if (document.hidden) this.togglePause(true); });
     this.hud.wireMenu({
       onToggle: () => this.togglePause(),
       onResume: () => this.togglePause(false),
       onRestart: () => window.location.reload(),
       onVolume: (v) => { Save.setVolume(v); this.sfx.setVolume(v); },
-      volume: Save.volume,
+      onHelp: () => this.hud.showHelp(this.player?.loadout ?? []),
+      onShake: (on) => { Save.setShake(on); this.engine.shakeEnabled = on; },
+      onMute: (m) => { Save.setMuted(m); this.sfx.setMuted(m); },
+      onMusic: (on) => { Save.setMusic(on); if (on) this.sfx.startMusic(); else this.sfx.stopMusic(); },
+      volume: Save.volume, shake: Save.shake, muted: Save.muted, music: Save.music,
     });
+    this.engine.shakeEnabled = Save.shake;
 
     this.hud.setLoading(0.05, '召喚物理之力…');
     this.physics = await Physics.create();
@@ -111,7 +121,9 @@ class Game {
 
     this.sfx.ensure();
     this.sfx.setVolume(Save.volume);
+    this.sfx.setMuted(Save.muted);
     if (this.sfx.ctx?.state === 'suspended') this.sfx.ctx.resume();
+    if (Save.music) this.sfx.startMusic();
 
     const wentFull = await enterFullscreen();
     if (isTouchDevice()) {
@@ -177,6 +189,7 @@ class Game {
     this.hud.setStageTag(index + 1, STAGES.length, stage.name);
     this.hud.announce(`第 ${index + 1} 關 · ${stage.name}`, stage.subtitle);
     this.sfx.gate();
+    this.checkAchievements();
   }
 
   onBossSpawn(boss) {
@@ -231,7 +244,9 @@ class Game {
     this.hud.hideBossBar();
     this.engine.addShake(0.6);
     this.hud.announce('魔王伏誅', '');
+    this.bossKills++;
     this.addScore(800 + this.stageIndex * 200);
+    this.checkAchievements();
     for (let i = 0; i < 14; i++) this.fx.spawnPickup(boss.position, i % 3 === 0 ? 'heal' : 'gold');
     this.player.gold += 60;
   }
@@ -329,6 +344,7 @@ class Game {
   applyDamage(enemy, damage, fromPos, knockback, crit = false, kind = '') {
     const dealt = enemy.takeDamage(damage, fromPos, knockback);
     if (dealt <= 0) return;
+    this.damageDealt += dealt;
     this.hud.damageNumber(enemy.position, damage, kind || (crit ? 'crit' : ''));
     if (kind !== 'dot' && kind !== 'poison' && kind !== 'burn') this.fx.hitSpark(enemy.position);
     if (this.player.lifesteal > 0) this.player.heal(damage * this.player.lifesteal);
@@ -351,9 +367,18 @@ class Game {
     this.player.gold += enemy.elite ? 12 : 3;
     if (Math.random() < (enemy.elite ? 0.9 : 0.14)) this.fx.spawnPickup(enemy.position, Math.random() < 0.6 ? 'heal' : 'mana');
     if (Math.random() < 0.5) this.fx.spawnPickup(enemy.position, 'gold');
+    this.checkAchievements();
   }
 
   addScore(n) { this.score += n; }
+
+  checkAchievements(victory = false) {
+    const ctx = {
+      kills: this.director?.kills ?? 0, bossKills: this.bossKills, combo: this.bestCombo,
+      level: this.player?.level ?? 1, stage: this.stageIndex + 1, gold: this.player?.gold ?? 0, victory,
+    };
+    for (const a of Achievements.check(ctx)) this.hud.toast(`成就解鎖：${a.name}`, a.desc);
+  }
 
   collectPickup(kind) {
     if (kind === 'heal') { this.player.heal(this.player.stats.maxHp * 0.12); this.sfx.pickup(); }
@@ -363,6 +388,9 @@ class Game {
 
   levelUp(level) {
     this.sfx.levelUp();
+    this.hud.announce('升級！', `等級 ${level}`);
+    if (this.player) this.fx.ringBurst(this.player.position, 3, 0xffe07a);
+    this.checkAchievements();
     this.paused = true;
     const pool = this.player.unequippedSkills();
     if (level % SLOTS_PER_MILESTONE === 0 && pool.length > 0) {
@@ -419,6 +447,7 @@ class Game {
     if (this.over) return;
     this.over = true;
     this.hud.setObjective('已通關');
+    this.checkAchievements(true);
     this.finishRun('亡域制霸');
   }
 
@@ -431,6 +460,7 @@ class Game {
         stage: this.stageIndex + 1, kills: this.director.kills, level: this.player.level,
         score: this.score, bestCombo: this.bestCombo, time: secs, gold: this.player.gold,
         difficulty: this.difficulty.name, highScore: Save.highScore, newBest: best,
+        damage: Math.round(this.damageDealt), bestiary: Save.bestiaryCount(),
       });
     }, 1400);
   }
@@ -448,6 +478,7 @@ class Game {
     if (this.comboTimer > 0) { this.comboTimer -= dt; if (this.comboTimer <= 0) this.combo = 0; }
 
     player.update(dt, this.input);
+    if (player.state === 'roll') fx.trail(player.position);
     director.update(dt, player, (e) => {
       const target = e._target ?? player.position;
       fx.fireBolt(e.position, target, {
@@ -458,7 +489,10 @@ class Game {
     });
     this.physics.step();
     player.syncFromPhysics();
-    for (const enemy of director.enemies) if (!enemy.dead) enemy.syncFromPhysics();
+    for (const enemy of director.enemies) {
+      if (!enemy.dead) enemy.syncFromPhysics();
+      enemy.updateBar(this.engine.camera);
+    }
 
     // DoTs (poison/burn) in 0.4s chunks.
     const now = performance.now();

@@ -78,6 +78,7 @@ export const ENEMY_TYPES = {
 
 export const MONSTER_KEYS = Object.keys(ENEMY_TYPES);
 let nextId = 1;
+const _pq = new THREE.Quaternion();
 
 export class Enemy {
   constructor(type, charData, scene, physics, sfx, mods = { hp: 1, damage: 1, speed: 1 }, opts = {}) {
@@ -116,6 +117,10 @@ export class Enemy {
     this.removeAt = Infinity;
     this.status = {}; // type → { until, ...data }
     this.specialTimer = (base.summonEvery || base.healEvery || base.blinkEvery || 3) * (0.5 + Math.random() * 0.5);
+    this.barGroup = null;
+    this.barFill = null;
+    this.barShownUntil = 0;
+    if (this.elite) { this.ensureBar(); this.barShownUntil = Infinity; }
 
     // Callbacks wired by the spawner/main.
     this.onHitPlayer = null;
@@ -150,6 +155,40 @@ export class Enemy {
   applyStatus(type, durationSec, data = {}) {
     const now = performance.now();
     this.status[type] = { until: now + durationSec * 1000, last: now, ...data };
+  }
+
+  // --- floating HP bar (billboarded; bosses use the top HUD bar instead) ---
+  ensureBar() {
+    if (this.barGroup || this.isBoss) return;
+    const g = new THREE.Group();
+    const bg = new THREE.Mesh(
+      new THREE.PlaneGeometry(1.1, 0.16),
+      new THREE.MeshBasicMaterial({ color: 0x140a0a, transparent: true, opacity: 0.85, depthTest: false }),
+    );
+    const fillGeo = new THREE.PlaneGeometry(1.06, 0.11);
+    fillGeo.translate(0.53, 0, 0); // pivot at left edge
+    const fill = new THREE.Mesh(fillGeo, new THREE.MeshBasicMaterial({ color: 0x5fd06a, depthTest: false }));
+    fill.position.x = -0.53;
+    fill.position.z = 0.001;
+    bg.renderOrder = 998; fill.renderOrder = 999;
+    g.add(bg, fill);
+    g.position.set(0, 2.0 * this.def.scale + 0.7, 0);
+    this.char.root.add(g);
+    this.barGroup = g; this.barFill = fill;
+  }
+
+  showBar() { this.ensureBar(); if (!this.elite) this.barShownUntil = performance.now() + 4000; }
+
+  updateBar(camera) {
+    if (!this.barGroup) return;
+    const show = !this.dead && (this.elite || performance.now() < this.barShownUntil);
+    this.barGroup.visible = show;
+    if (!show) return;
+    const r = Math.max(0, this.hp / this.maxHp);
+    this.barFill.scale.x = r;
+    this.barFill.material.color.setHex(r > 0.5 ? 0x5fd06a : r > 0.25 ? 0xd0b040 : 0xd04030);
+    this.char.root.getWorldQuaternion(_pq).invert();
+    this.barGroup.quaternion.copy(_pq.multiply(camera.quaternion));
   }
 
   // Back-compat helpers used by skills.
@@ -341,6 +380,7 @@ export class Enemy {
     const dealt = amount * this.damageTakenMult;
     this.hp -= dealt;
     this.char.flash();
+    this.showBar();
     const dir = new THREE.Vector3().subVectors(this.position, fromPos).setY(0).normalize();
     const kb = this.def.behavior === 'charger' && this.state === 'charge' ? knockbackForce * 0.3 : knockbackForce;
     this.knockback = { x: dir.x * kb, z: dir.z * kb, t: 0.25 };

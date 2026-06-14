@@ -190,6 +190,20 @@ export class Effects {
     });
   }
 
+  // Fading translucent disc left behind by the dodge roll.
+  trail(pos, color = 0xbfa86a) {
+    const mat = new THREE.MeshBasicMaterial({
+      color, transparent: true, opacity: 0.4, side: THREE.DoubleSide,
+      depthWrite: false, blending: THREE.AdditiveBlending,
+    });
+    const mesh = new THREE.Mesh(new THREE.CircleGeometry(0.55, 16), mat);
+    mesh.rotation.x = -Math.PI / 2;
+    mesh.position.copy(pos).setY(0.15);
+    this.scene.add(mesh);
+    let t = 0;
+    this.items.push({ mesh, update: (dt) => { t += dt; mat.opacity = Math.max(0, 0.4 - t * 2); return t < 0.2; } });
+  }
+
   // Generic impact burst (boss attacks, explosions).
   burst(pos, radius, color = 0xffa040) {
     this.ringBurst(pos, radius, color);

@@ -53,13 +53,54 @@ export class Hud {
   }
 
   // --- pause menu + settings ---
-  wireMenu({ onToggle, onResume, onRestart, onVolume, volume }) {
+  wireMenu(cfg) {
+    const { onToggle, onResume, onRestart, onVolume, volume, onHelp,
+      onShake, onMute, onMusic, shake = true, muted = false, music = true } = cfg;
     $('pause-btn').addEventListener('click', () => onToggle());
     $('resume-btn').addEventListener('click', () => onResume());
     $('pause-restart-btn').addEventListener('click', () => onRestart());
+    $('help-btn').addEventListener('click', () => onHelp());
+    $('pause-help-btn').addEventListener('click', () => onHelp());
+    $('help-close').addEventListener('click', () => this.hideHelp());
     const slider = $('volume-slider');
     slider.value = Math.round((volume ?? 0.35) * 100);
     slider.addEventListener('input', () => onVolume(slider.value / 100));
+    const shakeBox = $('toggle-shake'); shakeBox.checked = shake;
+    shakeBox.addEventListener('change', () => onShake(shakeBox.checked));
+    const muteBox = $('toggle-mute'); muteBox.checked = muted;
+    muteBox.addEventListener('change', () => onMute(muteBox.checked));
+    const musicBox = $('toggle-music'); musicBox.checked = music;
+    musicBox.addEventListener('change', () => onMusic(musicBox.checked));
+  }
+
+  // Help/controls overlay. Lists the live skill keybinds from the loadout.
+  showHelp(loadout = []) {
+    const skillLines = loadout.map(
+      (s, i) => `<div class="help-row"><span class="help-key">${SKILL_KEY_LABELS[i] ?? '—'}</span><span>${s.name}</span></div>`,
+    ).join('');
+    $('help-body').innerHTML =
+      `<div class="help-grid">
+        <div class="help-row"><span class="help-key">WASD</span><span>移動</span></div>
+        <div class="help-row"><span class="help-key">J / 左鍵</span><span>攻擊（三連擊）</span></div>
+        <div class="help-row"><span class="help-key">Space / 右鍵</span><span>翻滾（無敵幀）</span></div>
+        <div class="help-row"><span class="help-key">Q</span><span>治療藥水</span></div>
+        <div class="help-row"><span class="help-key">Esc</span><span>暫停</span></div>
+      </div>
+      <div class="help-sub">技能（數字鍵 / 點擊技能列）</div>
+      <div class="help-grid">${skillLines || '<div class="help-row"><span>—</span></div>'}</div>
+      <div class="help-sub">手機：左半邊拖曳移動，下方技能列與右下按鈕施放。</div>`;
+    $('help-overlay').classList.remove('hidden');
+  }
+  hideHelp() { $('help-overlay').classList.add('hidden'); }
+
+  // Achievement / event toast (auto-dismiss).
+  toast(title, sub = '') {
+    const el = document.createElement('div');
+    el.className = 'toast';
+    el.innerHTML = `<div class="toast-title">${title}</div>${sub ? `<div class="toast-sub">${sub}</div>` : ''}`;
+    $('toast-layer').appendChild(el);
+    setTimeout(() => el.classList.add('show'), 20);
+    setTimeout(() => { el.classList.remove('show'); setTimeout(() => el.remove(), 400); }, 3200);
   }
 
   setPause(open, stats = {}) {
@@ -261,8 +302,21 @@ export class Hud {
       );
     };
     for (const c of corridors) drawRect(c, 'rgba(160,135,90,0.30)');
+    const inRoom = (r) => playerPos.x >= r.minX && playerPos.x <= r.maxX && playerPos.z >= r.minZ && playerPos.z <= r.maxZ;
     for (const r of rooms) {
-      drawRect(r, r.cleared || !r.waves ? 'rgba(160,135,90,0.38)' : 'rgba(120,60,40,0.45)');
+      let fill = r.cleared || !r.waves ? 'rgba(160,135,90,0.38)' : 'rgba(120,60,40,0.45)';
+      if (r.type === 'final' && !r.cleared) fill = 'rgba(200,50,40,0.55)'; // boss room
+      if (inRoom(r)) fill = 'rgba(230,210,160,0.6)'; // current room highlight
+      drawRect(r, fill);
+      // boss-room skull marker
+      if (r.type === 'final' && !r.cleared) {
+        const mx = ox + (r.gx + r.w / 2) * gridSize * scale;
+        const mz = oz + (r.gz + r.h / 2) * gridSize * scale;
+        ctx.fillStyle = '#ff5a4a';
+        ctx.font = 'bold 11px serif';
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText('☠', mx, mz);
+      }
     }
     // player dot
     ctx.fillStyle = '#e8d9b0';
@@ -345,8 +399,10 @@ export class Hud {
       ['最高分', s.highScore],
       ['擊殺', s.kills],
       ['最高連擊', `x${s.bestCombo}`],
+      ['總傷害', s.damage ?? 0],
       ['等級', s.level],
       ['金幣', s.gold],
+      ['圖鑑', `${s.bestiary ?? 0}/12 種`],
       ['時間', `${mins}:${String(secs).padStart(2, '0')}`],
     ];
     $('end-stats').innerHTML = rows.map(

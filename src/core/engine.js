@@ -40,6 +40,7 @@ export class Engine {
 
     this.cameraTarget = new THREE.Vector3();
     this.shake = 0;
+    this.shakeEnabled = true;
     this.timeScale = 1;
 
     this.setupLights();
@@ -104,6 +105,7 @@ export class Engine {
   }
 
   addShake(amount) {
+    if (!this.shakeEnabled) return;
     this.shake = Math.min(0.6, this.shake + amount);
   }
 
