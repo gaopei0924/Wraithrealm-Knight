@@ -19,6 +19,7 @@ import { BOSSES } from './combat/bosses.js';
 import { CHARACTERS, DEFAULT_CHARACTER } from './combat/characters.js';
 import { applyMeta, soulReward, BASE_CLASSES } from './combat/meta.js';
 import { Hub } from './ui/hub.js';
+import { Codex } from './ui/codex.js';
 import { COMPANIONS, COMPANION_MODELS, STARTER_COMPANION } from './combat/companions.js';
 import { Companion } from './entities/companion.js';
 import { Achievements } from './combat/achievements.js';
@@ -124,6 +125,7 @@ class Game {
     this.clock = new THREE.Clock();
     window.__game = this;
     this.hub = new Hub(() => this.renderSetup());
+    this.codex = new Codex();
     this.hud.setLoading(1, '準備就緒');
     this.renderSetup();
   }
@@ -300,6 +302,7 @@ class Game {
     this.engine.addShake(0.6);
     this.setHitStop(220);
     this.hud.announce('魔王伏誅', '');
+    if (boss.bossDef?.id) Save.unlock(`boss:${boss.bossDef.id}`); // codex discovery
     this.bossKills++;
     this.addScore(800 + this.stageIndex * 200);
     this.checkAchievements();
@@ -798,6 +801,7 @@ class Game {
     const p = this.player.position;
     comp.setPosition(p.x + (Math.random() - 0.5) * 2, p.z + (Math.random() - 0.5) * 2);
     this.companions.push(comp);
+    Save.seeCompanion(id); // codex discovery
     this.fx.ringBurst(comp.position, 2.2, def.color ?? 0x88aaff);
     if (ttl) { this.hud.toast('亡魂召喚', `${def.name} (${ttl}s)`); }
     else { this.player.companionIds.push(id); this.hud.announce('同伴加入', def.name); this.hud.toast('召喚同伴', `${def.name} 加入戰鬥`); }
