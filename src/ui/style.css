@@ -656,3 +656,14 @@ body.touch #top-right { top: 62px; }
 /* generous touch targets for overlay buttons on touch devices */
 body.touch .menu-btn { min-width: 200px; padding: 14px 30px; }
 body.touch #help-close, body.touch #shop-done, body.touch #restart-btn { min-height: 48px; }
+
+/* ===================== fixes batch: enrage tint, crit/dodge text ===================== */
+#enrage-vignette {
+  position: fixed; inset: 0; pointer-events: none; z-index: 6; opacity: 0;
+  background: radial-gradient(ellipse at center, transparent 46%, rgba(200,20,20,0.42) 100%);
+}
+#enrage-vignette.active { animation: enrage-pulse 1s ease-in-out infinite; }
+@keyframes enrage-pulse { 0%,100% { opacity: 0.3; } 50% { opacity: 0.62; } }
+
+.dmg.dodge { color: #9fe6ff; font-size: 20px; font-weight: bold; letter-spacing: 2px; }
+.dmg.crit-pop { color: #ff5533; font-size: 26px; font-weight: bold; }

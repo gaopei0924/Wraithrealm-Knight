@@ -145,6 +145,18 @@ export class Boss extends Enemy {
     return null; // burn/shock handled as plain extra damage on the player
   }
 
+  // Bosses have super armor: damage never interrupts their attack pattern
+  // (no 'hurt' state — the base Enemy.takeDamage would freeze the boss AI,
+  // which has no 'hurt' case) and they are barely knocked back.
+  takeDamage(amount, fromPos, knockbackForce = 4) {
+    if (this.state === 'dead') return 0;
+    const dealt = amount * this.damageTakenMult;
+    this.hp -= dealt;
+    this.char.flash();
+    if (this.hp <= 0) { this.die(); return dealt; }
+    return dealt;
+  }
+
   die() {
     super.die();
     this.onDefeated?.(this);

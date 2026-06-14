@@ -57,8 +57,10 @@ export class Player {
     this.chill = null; // { factor, until }
     this.poison = null; // { dps, until, last }
     this.gold = 0;
+    this.reviveCharges = 0; // Second Wind upgrade
+    this.lastDodge = 0;
 
-    this.events = { onSwing: null, onSkill: null, onDeath: null, onLevelUp: null };
+    this.events = { onSwing: null, onSkill: null, onDeath: null, onLevelUp: null, onDodge: null, onRevive: null };
     this.char.play('Idle');
 
     // Player carries a faint warm light so they're always readable in the dark.
@@ -340,17 +342,27 @@ export class Player {
   }
 
   takeDamage(amount) {
-    if (
-      !this.alive || this.invincible || this.state === 'roll' ||
-      this.hitInvulnLeft > 0 || this.buff?.invuln
-    ) {
+    if (!this.alive) return false;
+    // Negated by dodge-roll i-frames / shield invuln → flash a "閃避".
+    if (this.invincible || this.state === 'roll' || this.buff?.invuln) {
+      const now = performance.now();
+      if (now - this.lastDodge > 250) { this.lastDodge = now; this.events.onDodge?.(); }
       return false;
     }
+    if (this.hitInvulnLeft > 0) return false;
     this.hp -= amount;
     this.hitInvulnLeft = 0.7;
     this.char.flash();
     this.sfx.hurt();
     if (this.hp <= 0) {
+      // Second Wind: revive once instead of dying.
+      if (this.reviveCharges > 0) {
+        this.reviveCharges--;
+        this.hp = this.stats.maxHp * 0.4;
+        this.hitInvulnLeft = 1.6;
+        this.events.onRevive?.();
+        return true;
+      }
       this.hp = 0;
       this.char.model.visible = true;
       this.enterState('dead');

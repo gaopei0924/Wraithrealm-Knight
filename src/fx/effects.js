@@ -217,10 +217,11 @@ export class Effects {
 
   // --- pickups (health / mana / gold) dropped by enemies & destructibles ---
   spawnPickup(pos, kind) {
-    const colors = { heal: 0xff4d5e, mana: 0x4d8cff, gold: 0xf5c542 };
+    const colors = { heal: 0xff4d5e, mana: 0x4d8cff, gold: 0xf5c542, bomb: 0xb060ff };
     const mat = new THREE.MeshBasicMaterial({ color: colors[kind] ?? 0xffffff });
+    if (kind === 'bomb') { mat.transparent = true; mat.blending = THREE.AdditiveBlending; }
     const mesh = new THREE.Mesh(this.orbGeo, mat);
-    mesh.scale.setScalar(kind === 'gold' ? 0.9 : 1.25);
+    mesh.scale.setScalar(kind === 'gold' ? 0.9 : kind === 'bomb' ? 1.8 : 1.25);
     mesh.position.copy(pos).setY(0.7);
     const drift = new THREE.Vector3((Math.random() - 0.5) * 2.5, 0, (Math.random() - 0.5) * 2.5);
     this.scene.add(mesh);
@@ -285,6 +286,7 @@ export class Effects {
     for (const b of this.playerBolts) this.scene.remove(b.mesh);
     for (const it of this.items) this.scene.remove(it.mesh);
     for (const p of this.pickups ?? []) this.scene.remove(p.mesh);
+    this.stopAmbient();
     this.orbs = [];
     this.bolts = [];
     this.playerBolts = [];
@@ -319,6 +321,52 @@ export class Effects {
       mesh: line,
       update: (dt) => { t += dt; mat.opacity = Math.max(0, 1 - t * 5); return t < 0.2; },
     });
+  }
+
+  // Drifting biome motes (embers / snow / dust) — a single Points cloud around
+  // the player, recoloured per stage. Cheap atmosphere, one draw call.
+  startAmbient(color, playerPos) {
+    this.stopAmbient();
+    const N = 90;
+    const pos = new Float32Array(N * 3);
+    this.ambientBase = [];
+    for (let i = 0; i < N; i++) {
+      const x = playerPos.x + (Math.random() - 0.5) * 44;
+      const y = Math.random() * 9 + 0.5;
+      const z = playerPos.z + (Math.random() - 0.5) * 30;
+      pos[i * 3] = x; pos[i * 3 + 1] = y; pos[i * 3 + 2] = z;
+      this.ambientBase.push({ vy: 0.2 + Math.random() * 0.5, vx: (Math.random() - 0.5) * 0.3, ph: Math.random() * 6 });
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    const mat = new THREE.PointsMaterial({
+      color, size: 0.16, transparent: true, opacity: 0.5,
+      blending: THREE.AdditiveBlending, depthWrite: false,
+    });
+    this.ambient = new THREE.Points(geo, mat);
+    this.ambient.frustumCulled = false;
+    this.scene.add(this.ambient);
+  }
+
+  stopAmbient() {
+    if (this.ambient) { this.scene.remove(this.ambient); this.ambient.geometry.dispose(); this.ambient.material.dispose(); this.ambient = null; }
+  }
+
+  updateAmbient(dt, playerPos) {
+    if (!this.ambient) return;
+    const arr = this.ambient.geometry.attributes.position.array;
+    this.ambientTime = (this.ambientTime ?? 0) + dt;
+    for (let i = 0; i < this.ambientBase.length; i++) {
+      const b = this.ambientBase[i];
+      arr[i * 3 + 1] += b.vy * dt;
+      arr[i * 3] += Math.sin(this.ambientTime + b.ph) * b.vx * dt;
+      if (arr[i * 3 + 1] > 10) { // recycle to the floor near the player
+        arr[i * 3] = playerPos.x + (Math.random() - 0.5) * 44;
+        arr[i * 3 + 1] = 0.3;
+        arr[i * 3 + 2] = playerPos.z + (Math.random() - 0.5) * 30;
+      }
+    }
+    this.ambient.geometry.attributes.position.needsUpdate = true;
   }
 
   update(dt) {

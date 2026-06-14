@@ -1,4 +1,4 @@
-import { Enemy, ENEMY_TYPES } from './enemy.js';
+import { Enemy, ENEMY_TYPES, ELITE_AFFIXES } from './enemy.js';
 import { Boss } from './boss.js';
 import { BOSSES } from '../combat/bosses.js';
 
@@ -62,7 +62,8 @@ export class WaveDirector {
     const now = performance.now();
     this.pendingSpawns = this.pendingSpawns.filter((spawn) => {
       if (now >= spawn.at) {
-        this.spawnEnemy(spawn.type, spawn.x, spawn.z, player, { elite: spawn.elite });
+        const affix = spawn.elite ? ELITE_AFFIXES[Math.floor(Math.random() * ELITE_AFFIXES.length)] : null;
+        this.spawnEnemy(spawn.type, spawn.x, spawn.z, player, { elite: spawn.elite, affix });
         return false;
       }
       return true;
@@ -73,6 +74,12 @@ export class WaveDirector {
     }
 
     this.enemies = this.enemies.filter((enemy) => {
+      // Treasure goblin escapes (despawns, no reward) if not killed in time.
+      if (!enemy.dead && enemy.type === 'goblin' && enemy.escapeAt && now >= enemy.escapeAt) {
+        this.physics.removeBody(enemy.actor.body);
+        enemy.dispose(this.scene);
+        return false;
+      }
       if (enemy.dead && now >= enemy.removeAt) {
         if (enemy === this.boss) this.boss = null;
         enemy.dispose(this.scene);
@@ -81,7 +88,9 @@ export class WaveDirector {
       return true;
     });
 
-    if (this.activeRoom && this.pendingSpawns.length === 0 && !this.enemies.some((e) => !e.dead)) {
+    // Goblins never block room completion.
+    if (this.activeRoom && this.pendingSpawns.length === 0 &&
+        !this.enemies.some((e) => !e.dead && e.type !== 'goblin')) {
       this.advanceWave(player);
     }
   }
@@ -93,6 +102,11 @@ export class WaveDirector {
     this.builder.setRoomLocked(room.id, true);
     this.sfx.gate();
     this.startWave(room, player);
+    // ~10% chance a treasure goblin scurries in.
+    if (Math.random() < 0.1) {
+      const { x, z } = this.pickSpawnPoint(room, player);
+      this.spawnEnemy('goblin', x, z, player, {}).then((g) => { if (g) g.escapeAt = performance.now() + 13000; });
+    }
   }
 
   startWave(room, player) {

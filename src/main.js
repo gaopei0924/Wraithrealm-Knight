@@ -150,6 +150,7 @@ class Game {
     if (this.director) this.director.disposeAll();
     this.fx.reset();
     this.hud.hideBossBar();
+    this.hud.setEnrage(false);
     this.bossRef = null;
 
     const wavePlans = buildWavePlans(stage, this.difficulty);
@@ -165,6 +166,7 @@ class Game {
     this.player.actor.body.setTranslation({ x: start.centerX, y: 1.1, z: start.centerZ }, true);
     this.player.syncFromPhysics();
     this.engine.cameraTarget.set(start.centerX, 0, start.centerZ);
+    this.fx.startAmbient(stage.theme.torch, { x: start.centerX, z: start.centerZ });
 
     this.director = new WaveDirector({
       rooms: this.rooms, builder: this.builder, assets: this.assets, scene: this.engine.scene,
@@ -202,7 +204,12 @@ class Game {
     this.hud.announce(boss.bossDef.name, boss.bossDef.title);
     boss.onTelegraph = (spec, ctx) => this.bossTelegraph(spec, ctx);
     boss.onAttack = (spec, ctx) => this.bossAttack(spec, ctx);
-    boss.onEnrage = () => { this.hud.announce('狂怒', ''); this.engine.addShake(0.4); };
+    boss.onEnrage = () => {
+      this.hud.announce('狂怒', '');
+      this.engine.addShake(0.4);
+      this.hud.setEnrage(true);
+      boss.char.setAura(0xff2a2a, 0.5);
+    };
     boss.onDefeated = (b) => this.onBossDefeated(b);
   }
 
@@ -244,7 +251,9 @@ class Game {
 
   onBossDefeated(boss) {
     this.hud.hideBossBar();
+    this.hud.setEnrage(false);
     this.engine.addShake(0.6);
+    this.setHitStop(220);
     this.hud.announce('魔王伏誅', '');
     this.bossKills++;
     this.addScore(800 + this.stageIndex * 200);
@@ -267,6 +276,14 @@ class Game {
     player.events.onSkill = (ctx) => this.resolveSkill(ctx);
     player.events.onLevelUp = (lvl) => this.levelUp(lvl);
     player.events.onDeath = () => this.defeat();
+    player.events.onDodge = () => this.hud.floatText(player.position, '閃避', 'dodge');
+    player.events.onRevive = () => {
+      this.hud.announce('絕境重生', '');
+      this.hud.toast('絕境重生', '撐過致命一擊');
+      this.fx.ringBurst(player.position, 4, 0xffe070);
+      this.fx.burst(player.position, 3, 0xffe070);
+      this.sfx.levelUp();
+    };
   }
 
   resolveSkill({ skill, origin, facing, damageMult }) {
@@ -348,6 +365,10 @@ class Game {
     if (dealt <= 0) return;
     this.damageDealt += dealt;
     this.hud.damageNumber(enemy.position, damage, kind || (crit ? 'crit' : ''));
+    if (crit) {
+      this.setHitStop(40); // micro freeze for impact
+      if (Math.random() < 0.3) this.hud.floatText(enemy.position, '暴擊!', 'crit-pop');
+    }
     if (kind !== 'dot' && kind !== 'poison' && kind !== 'burn') this.fx.hitSpark(enemy.position);
     if (this.player.lifesteal > 0) this.player.heal(damage * this.player.lifesteal);
     if (enemy.isBoss) this.sfx.bossHit();
@@ -362,13 +383,29 @@ class Game {
     this.comboTimer = 3;
     this.bestCombo = Math.max(this.bestCombo, this.combo);
     this.addScore(Math.round((enemy.def.xp ?? 10) * (1 + this.combo * 0.08)));
+    // combo milestone reward
+    if (this.combo > 0 && this.combo % 10 === 0) {
+      this.player.heal(this.player.stats.maxHp * 0.06);
+      this.hud.toast(`${this.combo} 連擊！`, '小幅回復生命');
+      this.player.mp = Math.min(this.player.stats.maxMp, this.player.mp + 15);
+    }
     // XP orbs
     const orbCount = Math.max(2, Math.round(enemy.def.xp / 8));
     for (let i = 0; i < orbCount; i++) this.fx.spawnOrb(enemy.position, enemy.def.xp / orbCount);
-    // pickups
-    this.player.gold += enemy.elite ? 12 : 3;
-    if (Math.random() < (enemy.elite ? 0.9 : 0.14)) this.fx.spawnPickup(enemy.position, Math.random() < 0.6 ? 'heal' : 'mana');
-    if (Math.random() < 0.5) this.fx.spawnPickup(enemy.position, 'gold');
+    // Treasure goblin hoard.
+    if (enemy.def.goldDrop) {
+      this.player.gold += enemy.def.goldDrop;
+      this.addScore(enemy.def.goldDrop * 2);
+      for (let i = 0; i < 12; i++) this.fx.spawnPickup(enemy.position, 'gold');
+      this.hud.toast('寶藏！', `+${enemy.def.goldDrop} 金幣`);
+      this.sfx.coin();
+    } else {
+      this.player.gold += enemy.elite ? 12 : 3;
+      if (Math.random() < (enemy.elite ? 0.9 : 0.14)) this.fx.spawnPickup(enemy.position, Math.random() < 0.6 ? 'heal' : 'mana');
+      if (Math.random() < 0.5) this.fx.spawnPickup(enemy.position, 'gold');
+      // rare Soul Bomb that clears the screen when collected
+      if (Math.random() < 0.018) this.fx.spawnPickup(enemy.position, 'bomb');
+    }
     this.checkAchievements();
   }
 
@@ -386,6 +423,20 @@ class Game {
     if (kind === 'heal') { this.player.heal(this.player.stats.maxHp * 0.12); this.sfx.pickup(); }
     else if (kind === 'mana') { this.player.mp = Math.min(this.player.stats.maxMp, this.player.mp + 25); this.sfx.pickup(); }
     else if (kind === 'gold') { this.player.gold += 5; this.addScore(10); this.sfx.coin(); }
+    else if (kind === 'bomb') this.detonateSoulBomb();
+  }
+
+  // Rare Soul Bomb pickup — nukes every enemy on screen.
+  detonateSoulBomb() {
+    this.hud.announce('靈魂爆發', '');
+    this.fx.burst(this.player.position, 9, 0xb060ff);
+    this.engine.addShake(0.5);
+    this.setHitStop(120);
+    this.sfx.bossRoar();
+    for (const enemy of [...this.director.aliveEnemies]) {
+      const dmg = enemy.isBoss ? 400 : 9999;
+      this.applyDamage(enemy, dmg, this.player.position, 6, false);
+    }
   }
 
   levelUp(level) {
@@ -467,9 +518,19 @@ class Game {
     }, 1400);
   }
 
+  setHitStop(ms) {
+    const now = performance.now();
+    if (now < (this._hitStopCd ?? 0)) return;
+    this.hitStopUntil = now + ms;
+    this._hitStopCd = now + ms + 110;
+  }
+
   frame() {
     const dt = Math.min(this.clock.getDelta(), 1 / 20);
-    if (!this.paused && !this.menuOpen) this.tick(dt);
+    this.input.pollGamepad();
+    if (this.input.padStartEdge) this.togglePause();
+    const frozen = performance.now() < (this.hitStopUntil ?? 0); // hit-stop juice
+    if (!this.paused && !this.menuOpen && !frozen) this.tick(dt);
     this.input.endFrame();
     this.engine.render();
   }
@@ -532,6 +593,7 @@ class Game {
     });
 
     this.torches.update(player.position, dt);
+    fx.updateAmbient(dt, player.position);
     this.engine.followCamera(player.position, dt);
     this.hud.update(player, director, { score: this.score, combo: this.combo });
     if (this.bossRef && !this.bossRef.dead) this.hud.updateBossBar(this.bossRef.hp, this.bossRef.maxHp);

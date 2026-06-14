@@ -274,6 +274,23 @@ export class Hud {
     }
   }
 
+  // Generic floating world-anchored text (dodge, crit popup, etc.).
+  floatText(worldPos, text, kind = '') {
+    const screen = this.engine.worldToScreen(worldPos);
+    if (!screen.visible) return;
+    const el = document.createElement('div');
+    el.className = `dmg ${kind}`;
+    el.textContent = text;
+    el.style.left = `${screen.x}px`;
+    el.style.top = `${screen.y - 56}px`;
+    this.damageLayer.appendChild(el);
+    setTimeout(() => el.remove(), 850);
+  }
+
+  setEnrage(on) {
+    document.getElementById('enrage-vignette')?.classList.toggle('active', on);
+  }
+
   damageNumber(worldPos, amount, kind = '') {
     const screen = this.engine.worldToScreen(worldPos);
     if (!screen.visible) return;

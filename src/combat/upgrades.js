@@ -57,6 +57,11 @@ export const UPGRADE_POOL = [
     desc: '獲得 2 瓶治療藥水',
     apply: (p) => { p.potions += 2; },
   },
+  {
+    id: 'secondwind', icon: 'shield', name: '絕境重生',
+    desc: '致命傷害時復活一次（40% 生命）',
+    apply: (p) => { p.reviveCharges = (p.reviveCharges ?? 0) + 1; },
+  },
 ];
 
 export function rollUpgradeChoices(count = 3) {

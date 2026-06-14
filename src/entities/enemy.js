@@ -33,9 +33,9 @@ export const ENEMY_TYPES = {
     projectile: { speed: 9, color: 0x8844ff }, name: '骷髏法師',
   },
   archer: {
-    model: 'Rogue', behavior: 'ranged', hp: 26, damage: 9, speed: 3.4, attackRange: 10,
-    windup: 0.6, attackAnim: '1H_Ranged_Shoot', xp: 26, scale: 0.95, radius: 0.45,
-    tint: 0x3c6e3c, projectile: { speed: 14, color: 0xbfe08a }, name: '黑森弓手',
+    model: 'Rogue', behavior: 'ranged', hp: 24, damage: 5, speed: 3.2, attackRange: 7.5,
+    windup: 0.95, attackAnim: '1H_Ranged_Shoot', xp: 22, scale: 0.95, radius: 0.45,
+    tint: 0x3c6e3c, projectile: { speed: 10, color: 0xbfe08a }, name: '黑森弓手',
   },
   brute: {
     model: 'Barbarian', behavior: 'charger', hp: 90, damage: 16, speed: 2.6, attackRange: 2.4,
@@ -74,9 +74,23 @@ export const ENEMY_TYPES = {
     windup: 0.3, attackAnim: 'Dualwield_Melee_Attack_Stab', xp: 38, scale: 1.0, radius: 0.45,
     tint: 0x7fa8c8, opacity: 0.55, blinkEvery: 4, name: '虛影遊魂',
   },
+  // Rare treasure goblin — flees the player, drops a hoard of gold if cornered.
+  goblin: {
+    model: 'Rogue', behavior: 'flee', hp: 38, damage: 0, speed: 6.4, attackRange: 0,
+    windup: 0, attackAnim: 'Running_A', xp: 30, scale: 0.9, radius: 0.45,
+    tint: 0xf5c542, goldDrop: 90, name: '寶藏哥布林',
+  },
 };
 
-export const MONSTER_KEYS = Object.keys(ENEMY_TYPES);
+export const MONSTER_KEYS = Object.keys(ENEMY_TYPES).filter((k) => k !== 'goblin');
+
+// Random affixes layered onto elite enemies for variety.
+export const ELITE_AFFIXES = [
+  { id: 'vampiric', name: '吸血', tint: 0xb01030, lifesteal: true },
+  { id: 'explosive', name: '爆裂', tint: 0xff7a1e, explodeOnDeath: { radius: 4, damage: 20, color: 0xff7a1e } },
+  { id: 'frostbrand', name: '寒鋒', tint: 0x4a8ad0, onHitStatus: { type: 'chill', duration: 2, factor: 0.5 } },
+];
+
 let nextId = 1;
 const _pq = new THREE.Quaternion();
 
@@ -97,7 +111,16 @@ export class Enemy {
     };
     this.char = new Character(charData, scene, this.def.scale);
     if (base.tint) this.char.setTint(base.tint, 0.6);
-    if (this.elite) this.char.setTint(0xffd24a, 0.35);
+    // Elites roll a random affix (vampiric / explosive / frostbrand).
+    this.affix = null;
+    if (this.elite && opts.affix) {
+      this.affix = opts.affix;
+      if (this.affix.explodeOnDeath) this.def = { ...this.def, explodeOnDeath: this.affix.explodeOnDeath };
+      if (this.affix.onHitStatus) this.def = { ...this.def, onHitStatus: this.affix.onHitStatus };
+      this.char.setTint(this.affix.tint, 0.4);
+    } else if (this.elite) {
+      this.char.setTint(0xffd24a, 0.35);
+    }
     if (base.opacity) {
       this.char.model.traverse((o) => {
         if (o.isMesh && o.material) { o.material.transparent = true; o.material.opacity = base.opacity; }
@@ -160,19 +183,20 @@ export class Enemy {
   // --- floating HP bar (billboarded; bosses use the top HUD bar instead) ---
   ensureBar() {
     if (this.barGroup || this.isBoss) return;
+    const W = 1.3, H = 0.18;
     const g = new THREE.Group();
     const bg = new THREE.Mesh(
-      new THREE.PlaneGeometry(1.1, 0.16),
-      new THREE.MeshBasicMaterial({ color: 0x140a0a, transparent: true, opacity: 0.85, depthTest: false }),
+      new THREE.PlaneGeometry(W + 0.06, H + 0.06),
+      new THREE.MeshBasicMaterial({ color: 0x0c0808, transparent: true, opacity: 0.9 }),
     );
-    const fillGeo = new THREE.PlaneGeometry(1.06, 0.11);
-    fillGeo.translate(0.53, 0, 0); // pivot at left edge
-    const fill = new THREE.Mesh(fillGeo, new THREE.MeshBasicMaterial({ color: 0x5fd06a, depthTest: false }));
-    fill.position.x = -0.53;
-    fill.position.z = 0.001;
+    const fillGeo = new THREE.PlaneGeometry(W, H);
+    fillGeo.translate(W / 2, 0, 0); // pivot at left edge so it depletes rightward
+    const fill = new THREE.Mesh(fillGeo, new THREE.MeshBasicMaterial({ color: 0x5fd06a }));
+    fill.position.set(-W / 2, 0, 0.01);
     bg.renderOrder = 998; fill.renderOrder = 999;
     g.add(bg, fill);
-    g.position.set(0, 2.0 * this.def.scale + 0.7, 0);
+    // sit just above the head; KayKit rigs are ~1.8u tall before scaling
+    g.position.set(0, 2.2 * this.def.scale + 0.55, 0);
     this.char.root.add(g);
     this.barGroup = g; this.barFill = fill;
   }
@@ -281,6 +305,15 @@ export class Enemy {
     if (!playerAlive) { this.char.play('Idle'); return; }
     const b = this.def.behavior;
 
+    // Treasure goblin: always run away, never attacks.
+    if (b === 'flee') {
+      const dir = toPlayer.clone().normalize().multiplyScalar(-1);
+      this.physics.moveActor(this.actor, dir.x * this.def.speed * dt, dir.z * this.def.speed * dt);
+      this.char.faceToward(Math.atan2(-toPlayer.x, -toPlayer.z), dt, 8);
+      this.char.play('Running_A', { timeScale: 1.3 });
+      return;
+    }
+
     // periodic specials
     this.specialTimer -= dt;
     if (this.specialTimer <= 0) {
@@ -373,6 +406,7 @@ export class Enemy {
   // Melee/charge contact: damage + optional status on the player.
   dealHit() {
     this.onHitPlayer?.(this.def.damage, this.def.onHitStatus);
+    if (this.affix?.lifesteal) this.hp = Math.min(this.maxHp, this.hp + this.def.damage * 1.5);
   }
 
   takeDamage(amount, fromPos, knockbackForce = 4) {
