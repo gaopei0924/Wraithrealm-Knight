@@ -711,3 +711,50 @@ body.editlayout .draggable {
   cursor: grab; touch-action: none;
 }
 body.editlayout #joystick { opacity: 1 !important; pointer-events: auto !important; }
+
+/* ── meta hub (聖殿) + codex ─────────────────────────────────────────── */
+#meta-bar {
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  margin-bottom: 10px;
+}
+#souls-count {
+  color: var(--gold); font-size: 14px; letter-spacing: 1px;
+  border: 1px solid var(--gold-dim); border-radius: 6px; padding: 4px 12px;
+}
+#hub-tabs, #codex-tabs {
+  display: flex; flex-wrap: wrap; gap: 6px; justify-content: center;
+  margin: 8px 0 12px;
+}
+.hub-tab {
+  background: rgba(20,16,12,0.8); color: #c8bfa8;
+  border: 1px solid var(--gold-dim); border-radius: 6px;
+  padding: 6px 16px; font-size: 14px; cursor: pointer; font-family: inherit;
+}
+.hub-tab.active { background: var(--gold-dim); color: #fff; border-color: var(--gold); }
+#hub-body, #codex-body {
+  width: min(560px, 92vw); max-height: 56vh; overflow-y: auto;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.hub-row {
+  display: flex; align-items: center; gap: 10px;
+  background: rgba(18,14,10,0.7); border: 1px solid var(--gold-dim);
+  border-radius: 8px; padding: 8px 12px;
+}
+.hub-row.active { border-color: var(--gold); background: rgba(60,46,24,0.6); }
+.hub-ico { width: 28px; height: 28px; color: var(--gold); flex: 0 0 28px; }
+.hub-ico svg { width: 100%; height: 100%; }
+.hub-meta { flex: 1; display: flex; flex-direction: column; text-align: left; }
+.hub-meta b { color: #efe6cf; font-size: 14px; }
+.hub-meta small { color: #9c9180; font-size: 12px; }
+.hub-buy {
+  background: var(--gold-dim); color: #fff; border: none; border-radius: 6px;
+  padding: 6px 12px; font-size: 13px; cursor: pointer; font-family: inherit;
+  white-space: nowrap; min-width: 84px;
+}
+.hub-buy:hover:not(:disabled) { background: var(--gold); }
+.hub-buy:disabled { opacity: 0.4; cursor: not-allowed; }
+.hub-slot-label {
+  color: var(--gold); font-size: 13px; letter-spacing: 2px;
+  margin: 8px 0 2px; text-align: left; border-bottom: 1px solid var(--gold-dim);
+}
+.codex-locked { opacity: 0.45; }

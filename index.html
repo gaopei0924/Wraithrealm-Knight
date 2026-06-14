@@ -107,6 +107,23 @@
     <button id="help-close" class="menu-btn">關閉</button>
   </div>
 
+  <!-- meta hub (聖殿): attributes / equipment / appearance / classes -->
+  <div id="hub-overlay" class="overlay hidden allow-scroll">
+    <div class="overlay-title">聖殿</div>
+    <div class="overlay-sub"><span id="hub-souls">魂晶 0</span></div>
+    <div id="hub-tabs"></div>
+    <div id="hub-body"></div>
+    <button id="hub-close" class="menu-btn">返回</button>
+  </div>
+
+  <!-- codex (圖鑑): monsters / bosses / companions / equipment -->
+  <div id="codex-overlay" class="overlay hidden allow-scroll">
+    <div class="overlay-title">圖鑑</div>
+    <div id="codex-tabs"></div>
+    <div id="codex-body"></div>
+    <button id="codex-close" class="menu-btn">返回</button>
+  </div>
+
   <!-- achievement toast stack -->
   <div id="toast-layer"></div>
 
@@ -163,6 +180,11 @@
 
     <!-- setup: difficulty + skill loadout (revealed when assets are ready) -->
     <div id="setup" class="hidden allow-scroll">
+      <div id="meta-bar">
+        <span id="souls-count">魂晶 0</span>
+        <button id="open-hub" class="menu-btn">⚜ 聖殿</button>
+        <button id="open-codex" class="menu-btn">圖鑑</button>
+      </div>
       <div class="setup-section">
         <div class="setup-label">選擇角色</div>
         <div id="character-row" class="setup-row"></div>

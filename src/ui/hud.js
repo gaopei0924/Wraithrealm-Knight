@@ -448,6 +448,7 @@ export class Hud {
       ['等級', s.level],
       ['金幣', s.gold],
       ['圖鑑', `${s.bestiary ?? 0}/12 種`],
+      ['魂晶', `+${s.souls ?? 0}`],
       ['時間', `${mins}:${String(secs).padStart(2, '0')}`],
     ];
     $('end-stats').innerHTML = rows.map(

@@ -17,6 +17,8 @@ import { DIFFICULTIES, enemyMods, buildWavePlans } from './combat/difficulty.js'
 import { SLOTS_PER_MILESTONE, SKILL_KEYS } from './combat/skills.js';
 import { BOSSES } from './combat/bosses.js';
 import { CHARACTERS, DEFAULT_CHARACTER } from './combat/characters.js';
+import { applyMeta, soulReward, BASE_CLASSES } from './combat/meta.js';
+import { Hub } from './ui/hub.js';
 import { COMPANIONS, COMPANION_MODELS, STARTER_COMPANION } from './combat/companions.js';
 import { Companion } from './entities/companion.js';
 import { Achievements } from './combat/achievements.js';
@@ -121,9 +123,21 @@ class Game {
 
     this.clock = new THREE.Clock();
     window.__game = this;
+    this.hub = new Hub(() => this.renderSetup());
     this.hud.setLoading(1, '準備就緒');
-    this.hud.showSetup(DIFFICULTIES, CHARACTERS, (difficulty, loadoutIds, characterId) =>
+    this.renderSetup();
+  }
+
+  // (Re)render the setup screen with only unlocked classes + the souls counter.
+  renderSetup() {
+    const unlocked = {};
+    for (const [id, def] of Object.entries(CHARACTERS)) {
+      if (BASE_CLASSES.has(id) || Save.classUnlocked(id)) unlocked[id] = def;
+    }
+    this.hud.showSetup(DIFFICULTIES, unlocked, (difficulty, loadoutIds, characterId) =>
       this.beginRun(difficulty, loadoutIds, characterId));
+    const sc = document.getElementById('souls-count');
+    if (sc) sc.textContent = `魂晶 ${Save.souls}`;
   }
 
   async beginRun(difficulty, loadoutIds, characterId) {
@@ -135,6 +149,9 @@ class Game {
     const charData = await this.assets.character(charDef.model);
     this.player = new Player(charData, this.engine.scene, this.physics, this.sfx, charDef.aliases);
     this.player.applyCharacter(charDef);
+    // persistent meta-progression: attributes + equipment + appearance aura
+    const meta = applyMeta(this.player, Save);
+    if (meta.auraColor != null) this.player.char.setAura(meta.auraColor, 0.45);
     this.companions = [];
     this.pendingMeteors = [];
     this.wirePlayerEvents();
@@ -579,13 +596,16 @@ class Game {
   finishRun(title) {
     const secs = Math.round((performance.now() - this.runStart) / 1000);
     const best = Save.recordScore(this.score, this.stageIndex);
+    // Bank 魂晶 for meta-progression.
+    const souls = soulReward({ score: this.score, stage: this.stageIndex + 1, kills: this.director.kills, bossKills: this.bossKills });
+    Save.addSouls(souls);
     Save.flush();
     setTimeout(() => {
       this.hud.showEnd(title, {
         stage: this.stageIndex + 1, kills: this.director.kills, level: this.player.level,
         score: this.score, bestCombo: this.bestCombo, time: secs, gold: this.player.gold,
         difficulty: this.difficulty.name, highScore: Save.highScore, newBest: best,
-        damage: Math.round(this.damageDealt), bestiary: Save.bestiaryCount(),
+        damage: Math.round(this.damageDealt), bestiary: Save.bestiaryCount(), souls,
       });
     }, 1400);
   }
