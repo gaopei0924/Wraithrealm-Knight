@@ -17,6 +17,8 @@ import { DIFFICULTIES, enemyMods, buildWavePlans } from './combat/difficulty.js'
 import { SLOTS_PER_MILESTONE, SKILL_KEYS } from './combat/skills.js';
 import { BOSSES } from './combat/bosses.js';
 import { CHARACTERS, DEFAULT_CHARACTER } from './combat/characters.js';
+import { COMPANIONS, COMPANION_MODELS, STARTER_COMPANION } from './combat/companions.js';
+import { Companion } from './entities/companion.js';
 import { Achievements } from './combat/achievements.js';
 import { ENEMY_TYPES } from './entities/enemy.js';
 import { Hud } from './ui/hud.js';
@@ -110,9 +112,10 @@ class Game {
 
     this.hud.setLoading(0.6, '喚醒英雄與亡者…');
     // Preload every hero + enemy rig so character-select + stages are instant.
-    for (const m of ['Knight', 'Barbarian', 'Mage', 'Rogue', 'Rogue_Hooded',
+    for (const m of new Set(['Knight', 'Barbarian', 'Mage', 'Rogue', 'Rogue_Hooded',
       'Grave_Zombie', 'Grave_Vampire', 'Grave_Skeleton', 'Grave_Ghost',
-      'Skeleton_Minion', 'Skeleton_Rogue', 'Skeleton_Warrior', 'Skeleton_Mage']) {
+      'Skeleton_Minion', 'Skeleton_Rogue', 'Skeleton_Warrior', 'Skeleton_Mage',
+      ...COMPANION_MODELS])) {
       await this.assets.loadGltf(`/assets/characters/${m}.glb`);
     }
 
@@ -132,6 +135,7 @@ class Game {
     const charData = await this.assets.character(charDef.model);
     this.player = new Player(charData, this.engine.scene, this.physics, this.sfx, charDef.aliases);
     this.player.applyCharacter(charDef);
+    this.companions = [];
     this.wirePlayerEvents();
     // chosen skills + the hero's signature skill (deduped, capped at 8)
     const ids = [...new Set([...(loadoutIds ?? []), charDef.signature])].slice(0, 8);
@@ -157,6 +161,7 @@ class Game {
     this.runStart = performance.now();
     this.stageIndex = -1;
     await this.loadStage(0);
+    await this.addCompanion(STARTER_COMPANION); // everyone starts with a loyal ally
     this.engine.renderer.setAnimationLoop(() => this.frame());
   }
 
@@ -185,6 +190,7 @@ class Game {
     const start = this.rooms[0];
     this.player.actor.body.setTranslation({ x: start.centerX, y: 1.1, z: start.centerZ }, true);
     this.player.syncFromPhysics();
+    for (const c of this.companions ?? []) c.setPosition(start.centerX, start.centerZ);
     this.engine.cameraTarget.set(start.centerX, 0, start.centerZ);
     this.fx.startAmbient(stage.theme.torch, { x: start.centerX, z: start.centerZ });
 
@@ -467,10 +473,17 @@ class Game {
     this.checkAchievements();
     this.paused = true;
     const pool = this.player.unequippedSkills();
+    const comps = this.availableCompanions();
     if (level % SLOTS_PER_MILESTONE === 0 && pool.length > 0) {
       this.hud.showSkillChoice(this.pickRandom(pool, Math.min(3, pool.length)), (skill) => {
         this.player.addSkill(skill.id); this.hud.setSkillBar(this.player.loadout); this.paused = false;
       });
+    } else if (level % 4 === 3 && comps.length > 0) {
+      // Companion recruitment milestone (levels 3, 7, 11, …).
+      const choices = this.pickRandom(comps, Math.min(3, comps.length)).map((c) => ({
+        icon: c.icon, name: c.name, desc: c.desc, apply: () => this.addCompanion(c.id),
+      }));
+      this.hud.showUpgradeChoices(choices, (choice) => { choice.apply(); this.paused = false; });
     } else {
       this.hud.showUpgradeChoices(rollUpgradeChoices(3), (choice) => { choice.apply(this.player); this.refreshPassives(); this.paused = false; });
     }
@@ -564,6 +577,7 @@ class Game {
     this.autoCombat();
     player.update(dt, this.input);
     this.updateSurvivors(dt);
+    this.updateCompanions(dt);
     if (player.state === 'roll') fx.trail(player.position);
     director.update(dt, player, (e) => {
       const target = e._target ?? player.position;
@@ -707,6 +721,48 @@ class Game {
   onThorns(enemy) {
     const dmg = 6 + this.player.weapons.thorns * 6;
     this.applyDamage(enemy, dmg, this.player.position, 3, false);
+  }
+
+  // --- Companions (同伴) ---------------------------------------------------
+  // Recruit a companion. If already owned, level it up instead (stronger).
+  async addCompanion(id) {
+    const def = COMPANIONS[id];
+    if (!def) return;
+    const existing = this.companions.find((c) => c.def.id === id);
+    if (existing) { existing.level++; this.hud.toast(`${def.name} 強化`, `等級 ${existing.level}`); return; }
+    if (this.companions.length >= 6) return;
+    const charData = await this.assets.character(def.model);
+    const comp = new Companion(def, charData, this.engine.scene, this.companions.length, 1);
+    const p = this.player.position;
+    comp.setPosition(p.x + (Math.random() - 0.5) * 2, p.z + (Math.random() - 0.5) * 2);
+    this.companions.push(comp);
+    this.player.companionIds.push(id);
+    this.fx.ringBurst(comp.position, 2.2, def.color ?? 0x88aaff);
+    this.hud.announce('同伴加入', def.name);
+    this.hud.toast('召喚同伴', `${def.name} 加入戰鬥`);
+    this.sfx.levelUp?.();
+  }
+
+  // Companion defs not yet recruited (for the level-up offer).
+  availableCompanions() {
+    const owned = new Set(this.companions.map((c) => c.def.id));
+    return Object.values(COMPANIONS).filter((c) => !owned.has(c.id));
+  }
+
+  updateCompanions(dt) {
+    if (!this.companions?.length) return;
+    const enemies = this.director.aliveEnemies;
+    const ctx = {
+      enemies,
+      power: this.player.stats.companionPower,
+      fx: this.fx,
+      onHeal: (amt) => this.player.heal(amt),
+      dealDamage: (enemy, dmg, from, knock) => {
+        const crit = Math.random() < this.player.stats.critChance * 0.5;
+        this.applyDamage(enemy, dmg * (crit ? this.player.stats.critMult : 1), from, knock, crit);
+      },
+    };
+    for (const c of this.companions) c.update(dt, this.player.position, ctx);
   }
 
   // Re-create the persistent passive-weapon visuals from current levels.

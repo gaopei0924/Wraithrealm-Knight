@@ -5,7 +5,7 @@
 // Maps the game's KayKit clip names → Kenney "Graveyard Kit" clip names so the
 // undead heroes animate correctly through the Character alias layer. Anything
 // unmapped falls back to idle (never a T-pose).
-const GRAVE_ALIASES = {
+export const GRAVE_ALIASES = {
   Idle: 'idle', Running_A: 'sprint', Running_B: 'sprint', Walking_A: 'walk', Walking_B: 'walk',
   Walking_D_Skeletons: 'walk', Dodge_Forward: 'jump', Death_A: 'die', Death_C_Skeletons: 'die',
   Hit_A: 'emote-no', Spawn_Ground: 'idle', Spawn_Ground_Skeletons: 'idle',

@@ -40,9 +40,11 @@ export class Player {
       magnet: 1,         // pickup pull-speed multiplier
       goldMult: 1,
       berserk: 0,        // bonus damage when below 35% HP (additive mult)
+      companionPower: 1, // multiplier on companion damage
     };
     // Passive auto-weapon levels (survivors-style).
     this.weapons = { orbit: 0, aura: 0, frost: 0, boomerang: 0, thorns: 0 };
+    this.companionIds = []; // companions the player has recruited this run
     this.hp = this.stats.maxHp;
     this.mp = this.stats.maxMp;
     this.potions = 3;
