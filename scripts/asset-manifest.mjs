@@ -61,6 +61,10 @@ const dungeonTiles = [
 
 const characters = [
   { url: `${ADV_BASE}/Knight.glb`, out: 'characters/Knight.glb' },
+  { url: `${ADV_BASE}/Barbarian.glb`, out: 'characters/Barbarian.glb' },
+  { url: `${ADV_BASE}/Mage.glb`, out: 'characters/Mage.glb' },
+  { url: `${ADV_BASE}/Rogue.glb`, out: 'characters/Rogue.glb' },
+  { url: `${ADV_BASE}/Rogue_Hooded.glb`, out: 'characters/Rogue_Hooded.glb' },
   { url: `${SKEL_BASE}/Skeleton_Minion.glb`, out: 'characters/Skeleton_Minion.glb' },
   { url: `${SKEL_BASE}/Skeleton_Warrior.glb`, out: 'characters/Skeleton_Warrior.glb' },
   { url: `${SKEL_BASE}/Skeleton_Rogue.glb`, out: 'characters/Skeleton_Rogue.glb' },

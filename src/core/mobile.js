@@ -80,6 +80,38 @@ export async function lockLandscape() {
   }
 }
 
+// Keeps the layout glued to the *visible* viewport. On mobile the URL bar
+// shrinks `visualViewport.height`; we mirror that into a --app-h CSS var and
+// resize the renderer, so the game always fills exactly what's on screen and
+// the address bar never overlaps the HUD — even when true fullscreen is
+// unavailable (e.g. iOS Safari/Chrome).
+export function fitViewport(onResize) {
+  const apply = () => {
+    const vv = window.visualViewport;
+    const h = Math.round(vv?.height ?? window.innerHeight);
+    const w = Math.round(vv?.width ?? window.innerWidth);
+    document.documentElement.style.setProperty('--app-h', `${h}px`);
+    document.documentElement.style.setProperty('--app-w', `${w}px`);
+    onResize?.();
+  };
+  apply();
+  window.visualViewport?.addEventListener('resize', apply);
+  window.visualViewport?.addEventListener('scroll', apply);
+  window.addEventListener('resize', apply);
+  window.addEventListener('orientationchange', () => setTimeout(apply, 250));
+}
+
+// Fallback: some mobile browsers ignore fullscreen from the first synthetic
+// activation. Re-attempt on the first real touch/click after the run starts.
+export function requestFullscreenOnFirstGesture() {
+  if (!isTouchDevice()) return;
+  const once = () => {
+    enterFullscreen();
+    document.removeEventListener('pointerdown', once);
+  };
+  document.addEventListener('pointerdown', once, { once: true });
+}
+
 // Show/hide a "please rotate" overlay when a touch device is held in portrait.
 export function watchOrientation(promptEl) {
   if (!isTouchDevice()) return;

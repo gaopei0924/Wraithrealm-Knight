@@ -14,6 +14,8 @@
 <body>
   <canvas id="game"></canvas>
   <div id="vignette"></div>
+  <div id="hurt-vignette"></div>
+  <div id="lowhp-vignette"></div>
 
   <div id="hud" class="hidden">
     <!-- top left: portrait + bars -->
@@ -28,12 +30,19 @@
       </div>
     </div>
 
-    <!-- top center: wave banner -->
+    <!-- top center: wave banner + boss bar -->
     <div id="wave-banner"><span class="rule"></span><span id="wave-text">WAVE 1</span><span class="rule"></span></div>
+    <div id="boss-bar" class="hidden">
+      <div id="boss-name">魔王</div>
+      <div id="boss-title">BOSS</div>
+      <div id="boss-hp"><div id="boss-hp-fill"></div></div>
+    </div>
 
     <!-- top right: kills, minimap, objective -->
     <div id="top-right">
       <div id="kills">擊殺 <span id="kill-count">0</span></div>
+      <div id="score-line">分數 <span id="score-count">0</span></div>
+      <div id="combo-line" class="hidden">連擊 <span id="combo-count">0</span></div>
       <canvas id="minimap" width="150" height="150"></canvas>
       <div id="objective">
         <div class="objective-title">目標</div>
@@ -58,8 +67,12 @@
     <!-- bottom left: floating joystick (repositions to touch point) -->
     <div id="joystick"><div id="joystick-knob"></div></div>
 
-    <!-- fullscreen toggle (top, between bars and wave banner) -->
+    <!-- gold counter (above the action cluster) -->
+    <div id="gold-line">金幣 <span id="gold-count">0</span></div>
+
+    <!-- fullscreen + pause toggles (top) -->
     <button id="fullscreen-btn" title="全螢幕"></button>
+    <button id="pause-btn" title="暫停 (Esc)">❘❘</button>
   </div>
 
   <!-- left-half touch surface that drives the joystick (mobile only) -->
@@ -83,11 +96,32 @@
     <div id="skill-cards"></div>
   </div>
 
+  <!-- pause menu -->
+  <div id="pause-overlay" class="overlay hidden">
+    <div class="overlay-title">暫停</div>
+    <div id="pause-stats" class="overlay-sub"></div>
+    <div class="setup-section" style="max-width:320px">
+      <div class="setup-label">音量</div>
+      <input id="volume-slider" type="range" min="0" max="100" value="35" />
+    </div>
+    <button id="resume-btn" class="menu-btn">繼續遊戲</button>
+    <button id="pause-restart-btn" class="menu-btn">重新開始</button>
+  </div>
+
+  <!-- between-stage shop -->
+  <div id="shop-overlay" class="overlay hidden">
+    <div class="overlay-title">商店</div>
+    <div class="overlay-sub">金幣 <span id="shop-gold">0</span> · 補給後深入下一關</div>
+    <div id="shop-cards"></div>
+    <button id="shop-done" class="menu-btn">前往下一關 →</button>
+  </div>
+
   <!-- death / victory overlay -->
   <div id="end-overlay" class="overlay hidden">
     <div class="overlay-title" id="end-title">你死了</div>
     <div class="overlay-sub" id="end-sub"></div>
-    <button id="restart-btn">再戰一場</button>
+    <div id="end-stats"></div>
+    <button id="restart-btn" class="menu-btn">再戰一場</button>
   </div>
 
   <!-- loading screen -->

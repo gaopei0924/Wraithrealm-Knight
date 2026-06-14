@@ -10,19 +10,26 @@
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
 html, body {
-  width: 100%; height: 100%; overflow: hidden; background: #000;
+  width: 100%; height: 100dvh; overflow: hidden; background: #000;
   -webkit-user-select: none; user-select: none;
   -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent;
   touch-action: none; overscroll-behavior: none;
   position: fixed; inset: 0;
 }
 
+/* --app-h / --app-w track the visible viewport (set from JS visualViewport);
+   everything full-bleed uses them so the mobile address bar never overlaps. */
+:root { --app-h: 100dvh; --app-w: 100vw; }
+
 /* show/hide helpers driven by the body.touch class set in JS */
 .touch-only { display: none; }
 body.touch .desktop-only { display: none; }
 body.touch .touch-only { display: block; }
 
-#game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+#game {
+  position: fixed; left: 0; top: 0;
+  width: var(--app-w); height: var(--app-h); display: block;
+}
 
 #vignette {
   position: fixed; inset: 0; pointer-events: none; z-index: 5;
@@ -34,7 +41,11 @@ body.touch .touch-only { display: block; }
 /* unified line-art icons (game-icons.net, CC BY 3.0) — pick up text colour */
 .gicon { width: 1em; height: 1em; display: block; fill: currentColor; }
 
-#hud { position: fixed; inset: 0; pointer-events: none; z-index: 10; color: #d8c9a8; }
+#hud {
+  position: fixed; left: 0; top: 0;
+  width: var(--app-w); height: var(--app-h);
+  pointer-events: none; z-index: 10; color: #d8c9a8;
+}
 
 /* ---------- top left: portrait + bars ---------- */
 #status-panel {
@@ -463,4 +474,100 @@ body.touch #touch-move-zone { pointer-events: auto; }
   #status-panel { left: calc(18px + env(safe-area-inset-left)); }
   #top-right { right: calc(18px + env(safe-area-inset-right)); }
   #action-cluster { right: calc(18px + env(safe-area-inset-right)); }
+}
+
+/* ===================== expansion: bosses, status, meta UI ===================== */
+
+/* hurt + low-HP screen vignettes */
+#hurt-vignette {
+  position: fixed; inset: 0; pointer-events: none; z-index: 6; opacity: 0;
+  background: radial-gradient(ellipse at center, transparent 45%, rgba(170,20,20,0.55) 100%);
+}
+#hurt-vignette.flash { animation: hurt-flash 0.4s ease-out; }
+@keyframes hurt-flash { 0% { opacity: 0.9; } 100% { opacity: 0; } }
+#lowhp-vignette {
+  position: fixed; inset: 0; pointer-events: none; z-index: 6; opacity: 0;
+  background: radial-gradient(ellipse at center, transparent 50%, rgba(140,0,0,0.5) 100%);
+  transition: opacity 0.3s;
+}
+#lowhp-vignette.active { animation: lowhp-pulse 1.1s ease-in-out infinite; }
+@keyframes lowhp-pulse { 0%,100% { opacity: 0.25; } 50% { opacity: 0.6; } }
+
+/* boss health bar (top center, under the wave banner) */
+#boss-bar {
+  position: absolute; top: 58px; left: 50%; transform: translateX(-50%);
+  width: min(560px, 78vw); text-align: center; pointer-events: none;
+}
+#boss-name { font-size: 22px; letter-spacing: 8px; color: #ff6a5a; text-shadow: 0 2px 8px #000, 0 0 16px rgba(200,40,30,0.5); }
+#boss-title { font-size: 11px; letter-spacing: 5px; color: #b89; margin: 2px 0 5px; }
+#boss-hp {
+  height: 16px; background: rgba(8,4,4,0.85);
+  border: 1px solid rgba(255,90,70,0.5); outline: 1px solid rgba(0,0,0,0.8);
+  clip-path: polygon(10px 0, calc(100% - 10px) 0, 100% 100%, 0 100%);
+}
+#boss-hp-fill {
+  height: 100%; width: 100%;
+  background: linear-gradient(#ff4530, #7c1010);
+  transition: width 0.18s ease-out;
+}
+
+/* score / combo / gold counters */
+#score-line, #combo-line, #gold-line {
+  font-size: 14px; letter-spacing: 2px; text-shadow: 0 1px 3px #000;
+}
+#score-count { color: #f5d76e; }
+#combo-line { color: #ff9a5a; font-size: 15px; }
+#combo-count { color: #ffce6a; font-weight: bold; }
+#gold-line {
+  position: absolute; right: 22px; bottom: 200px; color: #f5c542;
+  pointer-events: none; text-align: right;
+}
+
+/* pause + shop buttons */
+#pause-btn {
+  position: absolute; top: 16px; left: 50%; transform: translateX(-50%);
+  margin-left: 196px; width: 36px; height: 36px; pointer-events: auto;
+  background: rgba(12,9,6,0.6); border: 1px solid var(--edge); border-radius: 4px;
+  color: #c9a35c; font-size: 14px; cursor: pointer; line-height: 1;
+  display: flex; align-items: center; justify-content: center; letter-spacing: 1px;
+}
+#pause-btn:hover { border-color: var(--gold); color: #f0e2bb; }
+
+.menu-btn {
+  margin-top: 8px; padding: 12px 40px; font-size: 18px; letter-spacing: 6px;
+  font-family: inherit; color: var(--gold); background: linear-gradient(#241a0d, #0e0a05);
+  border: 1px solid var(--gold-dim); border-radius: 4px; cursor: pointer; pointer-events: auto;
+}
+.menu-btn:hover { border-color: var(--gold); color: #f0e2bb; }
+
+#volume-slider { width: 100%; pointer-events: auto; accent-color: var(--gold); }
+
+/* end-screen stat table */
+#end-stats {
+  margin-top: 6px; width: min(360px, 80vw);
+  display: flex; flex-direction: column; gap: 5px; pointer-events: none;
+}
+.stat-row {
+  display: flex; justify-content: space-between; font-size: 15px;
+  color: #cbbd9d; letter-spacing: 2px; border-bottom: 1px solid rgba(201,163,92,0.15); padding-bottom: 3px;
+}
+.stat-row span:last-child { color: #f0e2bb; }
+
+/* shop */
+#shop-cards { display: flex; gap: 16px; flex-wrap: wrap; justify-content: center; margin: 14px 0; }
+.shop-card { position: relative; }
+.shop-card .cost { margin-top: 8px; color: #f5c542; font-size: 13px; letter-spacing: 2px; }
+.shop-card.broke { opacity: 0.45; }
+
+/* damage-number variants for new status types */
+.dmg.poison { color: #9ade5a; font-size: 18px; }
+.dmg.burn { color: #ff8a3a; font-size: 18px; }
+
+/* mobile: tuck the gold counter / pause button so they stay reachable */
+@media (max-width: 900px), (max-height: 560px) {
+  #boss-bar { top: 44px; width: 70vw; }
+  #boss-name { font-size: 17px; letter-spacing: 5px; }
+  #gold-line { bottom: 168px; font-size: 12px; }
+  #pause-btn { margin-left: 150px; width: 30px; height: 30px; }
+  #score-line, #combo-line { font-size: 12px; }
 }

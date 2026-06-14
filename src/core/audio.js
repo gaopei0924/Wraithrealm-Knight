@@ -64,4 +64,13 @@ export class Sfx {
   gate() { this.tone(90, 0.5, { type: 'square', gain: 0.18, slide: -30 }); }
   potion() { this.tone(440, 0.2, { gain: 0.15, slide: 220 }); }
   whirl() { this.noise(0.4, { freq: 700, gain: 0.4, decay: 5 }); }
+  pickup() { this.tone(700, 0.09, { gain: 0.12, slide: 350 }); }
+  coin() { this.tone(1100, 0.07, { gain: 0.1, slide: 250 }); }
+  bossRoar() {
+    this.noise(0.7, { freq: 200, type: 'lowpass', gain: 0.7, decay: 3 });
+    this.tone(70, 0.7, { type: 'sawtooth', gain: 0.25, slide: -20 });
+  }
+  bossHit() { this.noise(0.2, { freq: 260, type: 'lowpass', gain: 0.8, decay: 6 }); this.tone(110, 0.2, { type: 'square', gain: 0.18, slide: -60 }); }
+  telegraph() { this.tone(300, 0.25, { type: 'triangle', gain: 0.08, slide: 120 }); }
+  setVolume(v) { this.ensure(); if (this.master) this.master.gain.value = v; }
 }

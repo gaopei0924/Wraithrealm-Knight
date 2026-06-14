@@ -79,6 +79,35 @@ export class Character {
     this.mixer.update(dt);
   }
 
+  // Tint every material toward a colour (used to differentiate monster variants
+  // and bosses from the same base rig). amount 0..1 = how strongly to pull.
+  setTint(hex, amount = 0.6) {
+    const tint = new THREE.Color(hex);
+    this.model.traverse((o) => {
+      if (o.isMesh && o.material?.color) {
+        o.material = o.material.clone();
+        o.material.color.lerp(tint, amount);
+        if (o.material.emissive) {
+          o.material.emissive.setHex(hex);
+          o.material.emissiveIntensity = 0.18;
+        }
+      }
+    });
+    // refresh flash targets to point at the new cloned materials
+    this.flashTargets = [];
+    this.model.traverse((o) => {
+      if (o.isMesh && o.material?.emissive) this.flashTargets.push(o.material);
+    });
+  }
+
+  // Persistent overlay colour (status aura) — set emissive without clobbering tint.
+  setAura(hex, intensity) {
+    for (const mat of this.flashTargets) {
+      mat.emissive.setHex(hex);
+      mat.emissiveIntensity = intensity;
+    }
+  }
+
   // Brief red flash on hit.
   flash() {
     for (const mat of this.flashTargets) {

@@ -4,11 +4,22 @@ import * as THREE from 'three';
 const CAMERA_OFFSET = new THREE.Vector3(0, 16.5, 10.5);
 const CAMERA_LERP = 4.5;
 
+// Visible viewport size — uses visualViewport so the mobile browser's
+// address bar never counts as play area (the canvas fits what's actually shown).
+export function viewportSize() {
+  const vv = window.visualViewport;
+  return {
+    w: Math.round(vv?.width ?? window.innerWidth),
+    h: Math.round(vv?.height ?? window.innerHeight),
+  };
+}
+
 export class Engine {
   constructor(canvas) {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    this.renderer.setSize(window.innerWidth, window.innerHeight);
+    const vp0 = viewportSize();
+    this.renderer.setSize(vp0.w, vp0.h);
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -20,7 +31,7 @@ export class Engine {
 
     this.camera = new THREE.PerspectiveCamera(
       42,
-      window.innerWidth / window.innerHeight,
+      vp0.w / vp0.h,
       0.5,
       120,
     );
@@ -60,9 +71,10 @@ export class Engine {
   }
 
   onResize() {
-    this.camera.aspect = window.innerWidth / window.innerHeight;
+    const vp = viewportSize();
+    this.camera.aspect = vp.w / vp.h;
     this.camera.updateProjectionMatrix();
-    this.renderer.setSize(window.innerWidth, window.innerHeight);
+    this.renderer.setSize(vp.w, vp.h);
   }
 
   // Re-tint scene atmosphere for a biome theme.
@@ -100,10 +112,11 @@ export class Engine {
   }
 
   worldToScreen(worldPos) {
+    const vp = viewportSize();
     const v = worldPos.clone().project(this.camera);
     return {
-      x: (v.x * 0.5 + 0.5) * window.innerWidth,
-      y: (-v.y * 0.5 + 0.5) * window.innerHeight,
+      x: (v.x * 0.5 + 0.5) * vp.w,
+      y: (-v.y * 0.5 + 0.5) * vp.h,
       visible: v.z < 1,
     };
   }

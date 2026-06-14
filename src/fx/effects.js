@@ -8,6 +8,7 @@ export class Effects {
     this.orbs = [];
     this.bolts = [];
     this.playerBolts = [];
+    this.pickups = [];
 
     this.arcMaterial = new THREE.MeshBasicMaterial({
       color: 0xffc878,
@@ -121,17 +122,22 @@ export class Effects {
     });
   }
 
-  fireBolt(from, target) {
+  fireBolt(from, target, spec = {}) {
+    const color = spec.color ?? 0x8844ff;
     const mesh = new THREE.Mesh(this.boltGeo, this.boltMat.clone());
+    mesh.material.color.setHex(color);
     mesh.position.copy(from).setY(1.4);
     const dir = new THREE.Vector3().subVectors(target, from).setY(0).normalize();
-    const light = new THREE.PointLight(0x8844ff, 6, 5);
+    const light = new THREE.PointLight(color, 6, 5);
     mesh.add(light);
     this.scene.add(mesh);
-    this.bolts.push({ mesh, dir, speed: 9, age: 0 });
+    this.bolts.push({
+      mesh, dir, speed: spec.speed ?? 9, age: 0,
+      damage: spec.damage ?? 10, status: spec.status ?? null,
+    });
   }
 
-  // Returns positions of bolts that hit the player this frame.
+  // Returns {pos, damage, status} for bolts that hit the player this frame.
   updateBolts(dt, playerPos, playerRadius = 0.7) {
     const hits = [];
     this.bolts = this.bolts.filter((bolt) => {
@@ -140,17 +146,93 @@ export class Effects {
       const flat = bolt.mesh.position.clone().setY(0);
       const target = playerPos.clone().setY(0);
       if (flat.distanceTo(target) < playerRadius) {
-        hits.push(bolt.mesh.position.clone());
+        hits.push({ pos: bolt.mesh.position.clone(), damage: bolt.damage, status: bolt.status });
         this.scene.remove(bolt.mesh);
         return false;
       }
-      if (bolt.age > 3.2) {
-        this.scene.remove(bolt.mesh);
-        return false;
-      }
+      if (bolt.age > 3.4) { this.scene.remove(bolt.mesh); return false; }
       return true;
     });
     return hits;
+  }
+
+  // Boss/AoE telegraph: a ground ring that fills over `duration`, then flashes.
+  telegraph(pos, radius, color, duration) {
+    const geo = new THREE.RingGeometry(radius * 0.92, radius, 40);
+    const mat = new THREE.MeshBasicMaterial({
+      color, transparent: true, opacity: 0.5, side: THREE.DoubleSide, depthWrite: false,
+    });
+    const ring = new THREE.Mesh(geo, mat);
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.copy(pos).setY(0.12);
+    const fillGeo = new THREE.CircleGeometry(radius, 40);
+    const fillMat = new THREE.MeshBasicMaterial({
+      color, transparent: true, opacity: 0.12, side: THREE.DoubleSide, depthWrite: false,
+    });
+    const fill = new THREE.Mesh(fillGeo, fillMat);
+    fill.rotation.x = -Math.PI / 2;
+    fill.position.copy(pos).setY(0.1);
+    fill.scale.setScalar(0.01);
+    this.scene.add(ring, fill);
+    let t = 0;
+    this.items.push({
+      mesh: ring,
+      update: (dt) => {
+        t += dt;
+        const p = Math.min(1, t / duration);
+        fill.scale.setScalar(Math.max(0.01, p));
+        fillMat.opacity = 0.12 + p * 0.25;
+        if (t >= duration) { fillMat.opacity = Math.max(0, 0.5 - (t - duration) * 3); }
+        const done = t > duration + 0.18;
+        if (done) this.scene.remove(fill);
+        return !done;
+      },
+    });
+  }
+
+  // Generic impact burst (boss attacks, explosions).
+  burst(pos, radius, color = 0xffa040) {
+    this.ringBurst(pos, radius, color);
+    this.hitSpark(pos);
+    const light = new THREE.PointLight(color, 14, radius * 2.5);
+    light.position.copy(pos).setY(1.2);
+    this.scene.add(light);
+    let t = 0;
+    this.items.push({ mesh: light, update: (dt) => { t += dt; light.intensity = Math.max(0, 14 - t * 50); return t < 0.3; } });
+  }
+
+  // --- pickups (health / mana / gold) dropped by enemies & destructibles ---
+  spawnPickup(pos, kind) {
+    const colors = { heal: 0xff4d5e, mana: 0x4d8cff, gold: 0xf5c542 };
+    const mat = new THREE.MeshBasicMaterial({ color: colors[kind] ?? 0xffffff });
+    const mesh = new THREE.Mesh(this.orbGeo, mat);
+    mesh.scale.setScalar(kind === 'gold' ? 0.9 : 1.25);
+    mesh.position.copy(pos).setY(0.7);
+    const drift = new THREE.Vector3((Math.random() - 0.5) * 2.5, 0, (Math.random() - 0.5) * 2.5);
+    const light = new THREE.PointLight(colors[kind] ?? 0xffffff, 3, 3);
+    mesh.add(light);
+    this.scene.add(mesh);
+    this.pickups = this.pickups ?? [];
+    this.pickups.push({ mesh, kind, age: 0, drift });
+  }
+
+  updatePickups(dt, playerPos, onCollect) {
+    if (!this.pickups) return;
+    this.pickups = this.pickups.filter((p) => {
+      p.age += dt;
+      if (p.age < 0.3) {
+        p.mesh.position.addScaledVector(p.drift, dt);
+      } else {
+        const dir = new THREE.Vector3().subVectors(playerPos, p.mesh.position).setY(0);
+        const dist = dir.length();
+        if (dist < 0.9) { this.scene.remove(p.mesh); onCollect(p.kind); return false; }
+        p.mesh.position.addScaledVector(dir.normalize(), Math.min(15, 4 + p.age * 8) * dt);
+      }
+      p.mesh.position.y = 0.7 + Math.sin(p.age * 6) * 0.12;
+      p.mesh.rotation.y += dt * 4;
+      if (p.age > 14) { this.scene.remove(p.mesh); return false; }
+      return true;
+    });
   }
 
   // Player skill projectile (fireball). Travels straight; explodes on the
@@ -191,9 +273,11 @@ export class Effects {
     for (const b of this.bolts) this.scene.remove(b.mesh);
     for (const b of this.playerBolts) this.scene.remove(b.mesh);
     for (const it of this.items) this.scene.remove(it.mesh);
+    for (const p of this.pickups ?? []) this.scene.remove(p.mesh);
     this.orbs = [];
     this.bolts = [];
     this.playerBolts = [];
+    this.pickups = [];
     this.items = [];
   }
 

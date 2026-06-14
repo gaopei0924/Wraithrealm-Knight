@@ -34,6 +34,42 @@ export class Hud {
     set('#rotate-icon', 'rotate');
   }
 
+  // --- boss bar ---
+  showBossBar(name, title) {
+    $('boss-name').textContent = name;
+    $('boss-title').textContent = title;
+    $('boss-hp-fill').style.width = '100%';
+    $('boss-bar').classList.remove('hidden');
+  }
+  updateBossBar(hp, max) { $('boss-hp-fill').style.width = `${Math.max(0, (hp / max) * 100)}%`; }
+  hideBossBar() { $('boss-bar').classList.add('hidden'); }
+
+  // --- hurt flash ---
+  flashHurt() {
+    const v = $('hurt-vignette');
+    v.classList.remove('flash');
+    void v.offsetWidth; // restart animation
+    v.classList.add('flash');
+  }
+
+  // --- pause menu + settings ---
+  wireMenu({ onToggle, onResume, onRestart, onVolume, volume }) {
+    $('pause-btn').addEventListener('click', () => onToggle());
+    $('resume-btn').addEventListener('click', () => onResume());
+    $('pause-restart-btn').addEventListener('click', () => onRestart());
+    const slider = $('volume-slider');
+    slider.value = Math.round((volume ?? 0.35) * 100);
+    slider.addEventListener('input', () => onVolume(slider.value / 100));
+  }
+
+  setPause(open, stats = {}) {
+    $('pause-overlay').classList.toggle('hidden', !open);
+    if (open) {
+      $('pause-stats').textContent =
+        `第 ${stats.stage} 關 · 分數 ${stats.score} · 擊殺 ${stats.kills} · 金幣 ${stats.gold}`;
+    }
+  }
+
   setLoading(progress, text) {
     $('loading-fill').style.width = `${Math.round(progress * 100)}%`;
     if (text) $('loading-text').textContent = text;
@@ -100,14 +136,23 @@ export class Hud {
     }, { once: true });
   }
 
-  update(player, director) {
-    $('hp-fill').style.width = `${(player.hp / player.stats.maxHp) * 100}%`;
+  update(player, director, extra = {}) {
+    const hpPct = (player.hp / player.stats.maxHp) * 100;
+    $('hp-fill').style.width = `${hpPct}%`;
     $('hp-text').textContent = `${Math.ceil(player.hp)}/${player.stats.maxHp}`;
     $('mp-fill').style.width = `${(player.mp / player.stats.maxMp) * 100}%`;
     $('mp-text').textContent = `${Math.floor(player.mp)}/${player.stats.maxMp}`;
     $('level-badge').textContent = player.level;
     $('kill-count').textContent = director.kills;
     $('btn-potion-count').textContent = player.potions;
+    $('score-count').textContent = extra.score ?? 0;
+    $('gold-count').textContent = player.gold ?? 0;
+    const combo = extra.combo ?? 0;
+    const comboLine = $('combo-line');
+    comboLine.classList.toggle('hidden', combo < 2);
+    if (combo >= 2) $('combo-count').textContent = `x${combo}`;
+    // low-HP danger vignette (pulses below 30%)
+    $('lowhp-vignette').classList.toggle('active', hpPct < 30 && player.alive);
     const expPct = Math.floor((player.xp / player.xpToNext) * 100);
     $('exp-fill').style.width = `${expPct}%`;
     $('exp-text').textContent = `EXP ${expPct}%`;
@@ -262,9 +307,51 @@ export class Hud {
     overlay.classList.remove('hidden');
   }
 
-  showEnd(title, sub) {
+  // Between-stage shop. items: [{id, icon, name, desc, cost, apply(player)}]
+  showShop(player, items, onDone) {
+    const overlay = $('shop-overlay');
+    const cardsEl = $('shop-cards');
+    const render = () => {
+      $('shop-gold').textContent = player.gold;
+      cardsEl.innerHTML = '';
+      for (const item of items) {
+        const card = document.createElement('div');
+        const affordable = player.gold >= item.cost;
+        card.className = 'upgrade-card shop-card' + (affordable ? '' : ' broke');
+        card.innerHTML =
+          `<div class="icon">${icon(item.icon)}</div><div class="name">${item.name}</div>` +
+          `<div class="desc">${item.desc}</div><div class="cost">${item.cost} 金</div>`;
+        card.addEventListener('click', () => {
+          if (player.gold < item.cost) return;
+          player.gold -= item.cost;
+          item.apply(player);
+          render();
+        });
+        cardsEl.appendChild(card);
+      }
+    };
+    render();
+    overlay.classList.remove('hidden');
+    $('shop-done').onclick = () => onDone();
+  }
+  hideShop() { $('shop-overlay').classList.add('hidden'); }
+
+  showEnd(title, s) {
     $('end-title').textContent = title;
-    $('end-sub').textContent = sub;
+    $('end-sub').textContent = `${s.difficulty}難度 · 第 ${s.stage} 關`;
+    const mins = Math.floor(s.time / 60), secs = s.time % 60;
+    const rows = [
+      ['分數', s.newBest ? `${s.score} ★新紀錄` : s.score],
+      ['最高分', s.highScore],
+      ['擊殺', s.kills],
+      ['最高連擊', `x${s.bestCombo}`],
+      ['等級', s.level],
+      ['金幣', s.gold],
+      ['時間', `${mins}:${String(secs).padStart(2, '0')}`],
+    ];
+    $('end-stats').innerHTML = rows.map(
+      ([k, v]) => `<div class="stat-row"><span>${k}</span><span>${v}</span></div>`,
+    ).join('');
     $('end-overlay').classList.remove('hidden');
     $('restart-btn').onclick = () => window.location.reload();
   }

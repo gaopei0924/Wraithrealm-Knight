@@ -4,6 +4,7 @@ import { Assets } from './core/assets.js';
 import { Input } from './core/input.js';
 import { Physics } from './core/physics.js';
 import { Sfx } from './core/audio.js';
+import { Save } from './core/storage.js';
 import { generateLayout } from './dungeon/layout.js';
 import { DungeonBuilder } from './dungeon/builder.js';
 import { STAGES, FINAL_STAGE_INDEX } from './dungeon/themes.js';
@@ -14,17 +15,14 @@ import { WaveDirector } from './entities/spawner.js';
 import { rollUpgradeChoices } from './combat/upgrades.js';
 import { DIFFICULTIES, enemyMods, buildWavePlans } from './combat/difficulty.js';
 import { SLOTS_PER_MILESTONE } from './combat/skills.js';
+import { BOSSES } from './combat/bosses.js';
+import { ENEMY_TYPES } from './entities/enemy.js';
 import { Hud } from './ui/hud.js';
 import { icon } from './ui/icons.js';
 import { TouchControls } from './core/touch.js';
 import {
-  isTouchDevice,
-  suppressBrowserGestures,
-  enterFullscreen,
-  exitFullscreen,
-  isFullscreen,
-  lockLandscape,
-  watchOrientation,
+  isTouchDevice, suppressBrowserGestures, enterFullscreen, exitFullscreen,
+  isFullscreen, lockLandscape, watchOrientation, fitViewport, requestFullscreenOnFirstGesture,
 } from './core/mobile.js';
 
 const canvas = document.getElementById('game');
@@ -38,22 +36,26 @@ class Game {
     this.sfx = new Sfx();
     this.assets = new Assets();
     this.paused = false;
+    this.menuOpen = false;
     this.over = false;
     this.started = false;
     this.totalKills = 0;
     this.waveNumber = 0;
+    this.score = 0;
+    this.combo = 0;
+    this.comboTimer = 0;
+    this.bestCombo = 0;
+    this.runStart = 0;
+    this.bossRef = null;
 
+    fitViewport(() => this.engine.onResize());
     if (isTouchDevice()) {
       document.body.classList.add('touch');
       suppressBrowserGestures();
       watchOrientation(document.getElementById('rotate-prompt'));
     }
     const fsBtn = document.getElementById('fullscreen-btn');
-    fsBtn.addEventListener('click', () => {
-      if (isFullscreen()) exitFullscreen();
-      else enterFullscreen();
-    });
-    // Keep the toggle icon in sync and re-fit the canvas when fullscreen flips.
+    fsBtn.addEventListener('click', () => { if (isFullscreen()) exitFullscreen(); else enterFullscreen(); });
     const onFsChange = () => {
       const full = isFullscreen();
       fsBtn.innerHTML = icon(full ? 'compress' : 'expand');
@@ -64,12 +66,20 @@ class Game {
     document.addEventListener('webkitfullscreenchange', onFsChange);
     this.hud.paintStaticIcons();
 
+    // Pause on Escape / pause button.
+    window.addEventListener('keydown', (e) => { if (e.code === 'Escape') this.togglePause(); });
+    this.hud.wireMenu({
+      onToggle: () => this.togglePause(),
+      onResume: () => this.togglePause(false),
+      onRestart: () => window.location.reload(),
+      onVolume: (v) => { Save.setVolume(v); this.sfx.setVolume(v); },
+      volume: Save.volume,
+    });
+
     this.hud.setLoading(0.05, '召喚物理之力…');
     this.physics = await Physics.create();
-
     this.hud.setLoading(0.2, '丈量石磚…');
     await this.assets.loadTileManifest();
-
     this.fx = new Effects(this.engine.scene);
 
     this.hud.setLoading(0.4, '喚醒騎士…');
@@ -78,8 +88,8 @@ class Game {
     this.wirePlayerEvents();
 
     this.hud.setLoading(0.7, '亡者甦醒中…');
-    // Preload all enemy meshes once so stage transitions are instant.
-    for (const m of ['Skeleton_Minion', 'Skeleton_Rogue', 'Skeleton_Warrior', 'Skeleton_Mage']) {
+    for (const m of ['Skeleton_Minion', 'Skeleton_Rogue', 'Skeleton_Warrior', 'Skeleton_Mage',
+      'Barbarian', 'Mage', 'Rogue', 'Rogue_Hooded']) {
       await this.assets.loadGltf(`/assets/characters/${m}.glb`);
     }
 
@@ -88,12 +98,8 @@ class Game {
 
     this.clock = new THREE.Clock();
     window.__game = this;
-
     this.hud.setLoading(1, '準備就緒');
-    // Setup screen: choose difficulty + 2 skills, then begin the run.
-    this.hud.showSetup(DIFFICULTIES, (difficulty, loadoutIds) => {
-      this.beginRun(difficulty, loadoutIds);
-    });
+    this.hud.showSetup(DIFFICULTIES, (difficulty, loadoutIds) => this.beginRun(difficulty, loadoutIds));
   }
 
   async beginRun(difficulty, loadoutIds) {
@@ -104,76 +110,68 @@ class Game {
     this.hud.setSkillBar(this.player.loadout);
 
     this.sfx.ensure();
+    this.sfx.setVolume(Save.volume);
     if (this.sfx.ctx?.state === 'suspended') this.sfx.ctx.resume();
 
-    // Request fullscreen on EVERY platform while the start-button gesture is
-    // still active, so the browser address/tab bar can't cover the play area.
-    // (Desktop Chrome needs this just as much as mobile.) If the user declines
-    // or the browser blocks it, the ⛶ button stays available.
     const wentFull = await enterFullscreen();
-    if (isTouchDevice()) await lockLandscape();
+    if (isTouchDevice()) {
+      await lockLandscape();
+      if (!wentFull) requestFullscreenOnFirstGesture();
+    }
     if (!wentFull) document.getElementById('fullscreen-btn').classList.add('nudge');
 
     this.hud.hideLoading();
     this.hud.show();
-
+    this.runStart = performance.now();
     this.stageIndex = -1;
     await this.loadStage(0);
-
     this.engine.renderer.setAnimationLoop(() => this.frame());
   }
 
   async loadStage(index) {
     this.stageIndex = index;
     const stage = STAGES[index];
-
-    // Tear down the previous stage (meshes, colliders, lights, enemies, fx).
     if (this.builder) this.builder.dispose();
     if (this.torches) this.torches.dispose();
     if (this.director) this.director.disposeAll();
     this.fx.reset();
+    this.hud.hideBossBar();
+    this.bossRef = null;
 
     const wavePlans = buildWavePlans(stage, this.difficulty);
     this.layout = generateLayout(Math.floor(Math.random() * 1e9), {
-      combatCount: stage.combatCount,
-      sizeScale: stage.sizeScale,
-      wavePlans,
+      combatCount: stage.combatCount, sizeScale: stage.sizeScale, wavePlans,
     });
-
     this.builder = new DungeonBuilder(this.assets, this.physics, this.engine.scene);
     this.rooms = await this.builder.build(this.layout, stage.theme);
     this.engine.applyTheme(stage.theme);
     this.torches = new TorchLights(this.engine.scene, this.builder.torchPoints, stage.theme.torch);
 
-    // Place the player in the start room.
     const start = this.rooms[0];
     this.player.actor.body.setTranslation({ x: start.centerX, y: 1.1, z: start.centerZ }, true);
     this.player.syncFromPhysics();
     this.engine.cameraTarget.set(start.centerX, 0, start.centerZ);
 
     this.director = new WaveDirector({
-      rooms: this.rooms,
-      builder: this.builder,
-      assets: this.assets,
-      scene: this.engine.scene,
-      physics: this.physics,
-      sfx: this.sfx,
-      mods: enemyMods(this.difficulty, stage),
+      rooms: this.rooms, builder: this.builder, assets: this.assets, scene: this.engine.scene,
+      physics: this.physics, sfx: this.sfx, mods: enemyMods(this.difficulty, stage),
+      eliteChance: stage.eliteChance ?? 0, bossType: stage.boss,
       events: {
-        onWaveStart: () => {
-          this.waveNumber++;
-          this.hud.setWave(this.waveNumber);
-          this.hud.announce(`WAVE ${this.waveNumber}`);
-        },
+        onWaveStart: () => { this.waveNumber++; this.hud.setWave(this.waveNumber); this.hud.announce(`WAVE ${this.waveNumber}`); },
         onRoomCleared: () => {
           this.hud.announce('房間肅清', '前往下一個房間 →');
-          this.player.heal(this.player.stats.maxHp * 0.3);
-          this.player.potions = Math.min(5, this.player.potions + 1);
+          this.player.heal(this.player.stats.maxHp * 0.25);
+          this.player.potions = Math.min(6, this.player.potions + 1);
         },
         onAllCleared: () => this.onStageCleared(),
+        onEliteSpawned: (e) => this.hud.announce('菁英降臨', e.def.name ?? ''),
+        onBossSpawn: (b) => this.onBossSpawn(b),
+        onEnemyExplode: (e, spec) => this.resolveExplosion(e, spec),
+        onBlink: (pos) => this.fx.ringBurst(pos, 1.6, 0x9fb8ff),
       },
     });
-    this.director.kills = this.totalKills; // carry the running total
+    await this.director.preloadCharacters();
+    this.director.kills = this.totalKills;
 
     this.hud.setObjective(`${stage.name}：消滅所有敵人`);
     this.hud.setStageTag(index + 1, STAGES.length, stage.name);
@@ -181,19 +179,69 @@ class Game {
     this.sfx.gate();
   }
 
-  onStageCleared() {
-    this.totalKills = this.director.kills;
-    if (this.stageIndex >= FINAL_STAGE_INDEX) {
-      this.victory();
-      return;
+  onBossSpawn(boss) {
+    this.bossRef = boss;
+    this.hud.showBossBar(boss.bossDef.name, boss.bossDef.title);
+    this.sfx.bossRoar();
+    this.engine.addShake(0.5);
+    this.hud.announce(boss.bossDef.name, boss.bossDef.title);
+    boss.onTelegraph = (spec, ctx) => this.bossTelegraph(spec, ctx);
+    boss.onAttack = (spec, ctx) => this.bossAttack(spec, ctx);
+    boss.onEnrage = () => { this.hud.announce('狂怒', ''); this.engine.addShake(0.4); };
+    boss.onDefeated = (b) => this.onBossDefeated(b);
+  }
+
+  bossTelegraph(spec, ctx) {
+    this.sfx.telegraph();
+    if (spec.type === 'nova' || spec.type === 'slam') {
+      this.fx.telegraph(ctx.origin, spec.range, ctx.color, spec.telegraph);
+    } else if (spec.type === 'cleave') {
+      this.fx.telegraph(ctx.origin, spec.range, ctx.color, spec.telegraph);
     }
-    // Brief beat, then descend to the next biome.
-    this.paused = true;
-    this.hud.announce('關卡完成', '深入下一層…');
-    setTimeout(async () => {
-      await this.loadStage(this.stageIndex + 1);
-      this.paused = false;
-    }, 1800);
+  }
+
+  // Resolve a boss attack's impact against the player.
+  bossAttack(spec, ctx) {
+    const boss = this.bossRef;
+    const p = this.player;
+    const dist = p.position.distanceTo(ctx.origin);
+    const hitPlayer = (dmg) => {
+      if (p.takeDamage(dmg)) {
+        this.hud.damageNumber(p.position, dmg, 'player-hit');
+        if (ctx.status?.type === 'chill') p.applyChill(ctx.status.factor, ctx.status.duration);
+        else if (ctx.status?.type === 'poison') p.applyPoison(ctx.status.dps, ctx.status.duration);
+        this.onPlayerHurt();
+      }
+    };
+    if (spec.type === 'nova' || spec.type === 'slam') {
+      this.fx.burst(ctx.origin, spec.range, ctx.color);
+      this.engine.addShake(0.35);
+      if (dist <= spec.range) hitPlayer(spec.damage);
+    } else if (spec.type === 'cleave') {
+      this.fx.slashArc(ctx.origin, ctx.facing, spec.range, spec.arc, ctx.color);
+      this.engine.addShake(0.25);
+      const to = new THREE.Vector2(p.position.x - ctx.origin.x, p.position.z - ctx.origin.z);
+      const fwd = new THREE.Vector2(Math.sin(ctx.facing), Math.cos(ctx.facing));
+      if (to.length() <= spec.range && (to.length() < 1 || Math.abs(fwd.angleTo(to)) <= spec.arc)) hitPlayer(spec.damage);
+    }
+    if (boss?.bossDef.lifesteal) boss.hp = Math.min(boss.maxHp, boss.hp + spec.damage * 1.5);
+  }
+
+  onBossDefeated(boss) {
+    this.hud.hideBossBar();
+    this.engine.addShake(0.6);
+    this.hud.announce('魔王伏誅', '');
+    this.addScore(800 + this.stageIndex * 200);
+    for (let i = 0; i < 14; i++) this.fx.spawnPickup(boss.position, i % 3 === 0 ? 'heal' : 'gold');
+    this.player.gold += 60;
+  }
+
+  resolveExplosion(enemy, spec) {
+    this.fx.burst(enemy.position, spec.radius, spec.color ?? 0xff7a1e);
+    this.engine.addShake(0.3);
+    if (this.player.position.distanceTo(enemy.position) <= spec.radius) {
+      if (this.player.takeDamage(spec.damage)) { this.hud.damageNumber(this.player.position, spec.damage, 'player-hit'); this.onPlayerHurt(); }
+    }
   }
 
   wirePlayerEvents() {
@@ -204,31 +252,19 @@ class Game {
     player.events.onDeath = () => this.defeat();
   }
 
-  // Dispatch a skill's effect spec into concrete damage + VFX.
   resolveSkill({ skill, origin, facing, damageMult }) {
     const fx = skill.effect;
     const damage = (fx.damage ?? 0) * damageMult;
     switch (fx.type) {
-      case 'nova':
-        this.applyNova(origin, fx, damage);
-        break;
+      case 'nova': this.applyNova(origin, fx, damage); break;
       case 'arc':
-        this.resolveArcHit(
-          { origin, facing, range: fx.range, arc: fx.arc, damage, finisher: true, knock: fx.knockback },
-          fx.color,
-        );
-        this.engine.addShake(fx.shake ?? 0.2);
-        break;
-      case 'projectile':
-        this.fx.firePlayerBolt(origin, facing, fx);
-        break;
-      case 'chain':
-        this.resolveChain(origin, fx, damageMult);
-        break;
+        this.resolveArcHit({ origin, facing, range: fx.range, arc: fx.arc, damage, finisher: true, knock: fx.knockback }, fx.color);
+        this.engine.addShake(fx.shake ?? 0.2); break;
+      case 'projectile': this.fx.firePlayerBolt(origin, facing, fx); break;
+      case 'chain': this.resolveChain(origin, fx, damageMult); break;
       case 'buff':
         this.fx.ringBurst(origin, 2.6, fx.color);
-        if (fx.invuln) this.hud.announce('聖盾庇護', '');
-        else if (fx.damageMult) this.hud.announce('狂暴', '');
+        if (fx.invuln) this.hud.announce('聖盾庇護', ''); else if (fx.damageMult) this.hud.announce('狂暴', '');
         break;
     }
   }
@@ -250,15 +286,12 @@ class Game {
     if (hit) this.sfx.hit();
   }
 
-  // Lightning that hops between the nearest enemies, damaging each.
   resolveChain(origin, fx, damageMult) {
     const remaining = [...this.director.aliveEnemies];
     const points = [origin];
-    let from = origin;
-    let struck = false;
+    let from = origin, struck = false;
     for (let jump = 0; jump < fx.jumps && remaining.length; jump++) {
-      let best = -1;
-      let bestDist = fx.range * fx.range;
+      let best = -1, bestDist = fx.range * fx.range;
       for (let i = 0; i < remaining.length; i++) {
         const d = remaining[i].position.distanceToSquared(from);
         if (d < bestDist) { bestDist = d; best = i; }
@@ -281,93 +314,130 @@ class Game {
     const forward = new THREE.Vector2(Math.sin(swing.facing), Math.cos(swing.facing));
     let hitAny = false;
     for (const enemy of this.director.aliveEnemies) {
-      const to = new THREE.Vector2(
-        enemy.position.x - swing.origin.x,
-        enemy.position.z - swing.origin.z,
-      );
+      const to = new THREE.Vector2(enemy.position.x - swing.origin.x, enemy.position.z - swing.origin.z);
       const dist = to.length();
       if (dist > swing.range + enemy.def.radius) continue;
-      const angle = Math.abs(forward.angleTo(to));
-      if (dist > 0.8 && angle > swing.arc) continue;
-
+      if (dist > 0.8 && Math.abs(forward.angleTo(to)) > swing.arc) continue;
       const crit = Math.random() < this.player.stats.critChance;
       const damage = swing.damage * (crit ? this.player.stats.critMult : 1);
-      const knock = swing.knock ?? (swing.finisher ? 7 : 4);
-      this.applyDamage(enemy, damage, swing.origin, knock, crit);
+      this.applyDamage(enemy, damage, swing.origin, swing.knock ?? (swing.finisher ? 7 : 4), crit);
       hitAny = true;
     }
-    if (hitAny) {
-      this.sfx.hit();
-      this.engine.addShake(swing.finisher ? 0.22 : 0.1);
-    }
+    if (hitAny) { this.sfx.hit(); this.engine.addShake(swing.finisher ? 0.22 : 0.1); }
   }
 
   applyDamage(enemy, damage, fromPos, knockback, crit = false, kind = '') {
     const dealt = enemy.takeDamage(damage, fromPos, knockback);
     if (dealt <= 0) return;
     this.hud.damageNumber(enemy.position, damage, kind || (crit ? 'crit' : ''));
-    if (kind !== 'dot') this.fx.hitSpark(enemy.position);
-    if (this.player.lifesteal > 0) {
-      this.player.heal(damage * this.player.lifesteal);
-    }
-    if (enemy.dead) {
-      this.director.notifyKill(enemy);
-      const orbCount = Math.max(2, Math.round(enemy.def.xp / 8));
-      for (let i = 0; i < orbCount; i++) {
-        this.fx.spawnOrb(enemy.position, enemy.def.xp / orbCount);
-      }
-    }
+    if (kind !== 'dot' && kind !== 'poison' && kind !== 'burn') this.fx.hitSpark(enemy.position);
+    if (this.player.lifesteal > 0) this.player.heal(damage * this.player.lifesteal);
+    if (enemy.isBoss) this.sfx.bossHit();
+    if (enemy.dead) this.onEnemyKilled(enemy);
+  }
+
+  onEnemyKilled(enemy) {
+    this.director.notifyKill(enemy);
+    Save.recordKill(enemy.type);
+    // combo + score
+    this.combo++;
+    this.comboTimer = 3;
+    this.bestCombo = Math.max(this.bestCombo, this.combo);
+    this.addScore(Math.round((enemy.def.xp ?? 10) * (1 + this.combo * 0.08)));
+    // XP orbs
+    const orbCount = Math.max(2, Math.round(enemy.def.xp / 8));
+    for (let i = 0; i < orbCount; i++) this.fx.spawnOrb(enemy.position, enemy.def.xp / orbCount);
+    // pickups
+    this.player.gold += enemy.elite ? 12 : 3;
+    if (Math.random() < (enemy.elite ? 0.9 : 0.14)) this.fx.spawnPickup(enemy.position, Math.random() < 0.6 ? 'heal' : 'mana');
+    if (Math.random() < 0.5) this.fx.spawnPickup(enemy.position, 'gold');
+  }
+
+  addScore(n) { this.score += n; }
+
+  collectPickup(kind) {
+    if (kind === 'heal') { this.player.heal(this.player.stats.maxHp * 0.12); this.sfx.pickup(); }
+    else if (kind === 'mana') { this.player.mp = Math.min(this.player.stats.maxMp, this.player.mp + 25); this.sfx.pickup(); }
+    else if (kind === 'gold') { this.player.gold += 5; this.addScore(10); this.sfx.coin(); }
   }
 
   levelUp(level) {
     this.sfx.levelUp();
     this.paused = true;
-    // Every 5 levels grant a skill point: pick a new skill (new loadout slot).
     const pool = this.player.unequippedSkills();
     if (level % SLOTS_PER_MILESTONE === 0 && pool.length > 0) {
-      const choices = this.pickRandom(pool, Math.min(3, pool.length));
-      this.hud.showSkillChoice(choices, (skill) => {
-        this.player.addSkill(skill.id);
-        this.hud.setSkillBar(this.player.loadout);
-        this.paused = false;
+      this.hud.showSkillChoice(this.pickRandom(pool, Math.min(3, pool.length)), (skill) => {
+        this.player.addSkill(skill.id); this.hud.setSkillBar(this.player.loadout); this.paused = false;
       });
     } else {
-      this.hud.showUpgradeChoices(rollUpgradeChoices(3), (choice) => {
-        choice.apply(this.player);
-        this.paused = false;
-      });
+      this.hud.showUpgradeChoices(rollUpgradeChoices(3), (choice) => { choice.apply(this.player); this.paused = false; });
     }
   }
 
   pickRandom(arr, n) {
-    const pool = [...arr];
-    const out = [];
-    while (out.length < n && pool.length) {
-      out.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0]);
-    }
+    const pool = [...arr], out = [];
+    while (out.length < n && pool.length) out.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0]);
     return out;
+  }
+
+  togglePause(force) {
+    if (!this.started || this.over || this.paused) return; // don't pause over level/stage overlays
+    const next = force ?? !this.menuOpen;
+    this.menuOpen = next;
+    this.hud.setPause(next, { score: this.score, kills: this.director?.kills ?? 0, stage: this.stageIndex + 1, gold: this.player?.gold ?? 0 });
+  }
+
+  onStageCleared() {
+    this.totalKills = this.director.kills;
+    Save.flush();
+    if (this.stageIndex >= FINAL_STAGE_INDEX) { this.victory(); return; }
+    // Shop between stages, then descend.
+    this.paused = true;
+    this.hud.showShop(this.player, this.SHOP_ITEMS(), () => {
+      this.hud.hideShop();
+      this.hud.announce('關卡完成', '深入下一層…');
+      setTimeout(async () => { await this.loadStage(this.stageIndex + 1); this.paused = false; }, 700);
+    });
+  }
+
+  SHOP_ITEMS() {
+    return [
+      { id: 'heal', icon: 'potion', name: '治療', desc: '回滿生命', cost: 30, apply: (p) => { p.hp = p.stats.maxHp; } },
+      { id: 'maxhp', icon: 'up_vitality', name: '強健', desc: '最大生命 +30', cost: 60, apply: (p) => { p.stats.maxHp += 30; p.hp += 30; } },
+      { id: 'dmg', icon: 'up_blade', name: '鋒利', desc: '傷害 +12%', cost: 70, apply: (p) => { p.stats.damageMult *= 1.12; } },
+      { id: 'potion', icon: 'potion', name: '藥水 x3', desc: '補滿藥水', cost: 40, apply: (p) => { p.potions = 6; } },
+    ];
   }
 
   defeat() {
     if (this.over) return;
     this.over = true;
-    setTimeout(() => {
-      this.hud.showEnd('你死了', `第 ${this.stageIndex + 1} 關 · 擊殺 ${this.director.kills} · 等級 ${this.player.level}`);
-    }, 1400);
+    this.finishRun('你死了');
   }
 
   victory() {
     if (this.over) return;
     this.over = true;
     this.hud.setObjective('已通關');
+    this.finishRun('亡域制霸');
+  }
+
+  finishRun(title) {
+    const secs = Math.round((performance.now() - this.runStart) / 1000);
+    const best = Save.recordScore(this.score, this.stageIndex);
+    Save.flush();
     setTimeout(() => {
-      this.hud.showEnd('亡域制霸', `擊殺 ${this.director.kills} · 等級 ${this.player.level} · ${this.difficulty.name}難度`);
-    }, 1600);
+      this.hud.showEnd(title, {
+        stage: this.stageIndex + 1, kills: this.director.kills, level: this.player.level,
+        score: this.score, bestCombo: this.bestCombo, time: secs, gold: this.player.gold,
+        difficulty: this.difficulty.name, highScore: Save.highScore, newBest: best,
+      });
+    }, 1400);
   }
 
   frame() {
     const dt = Math.min(this.clock.getDelta(), 1 / 20);
-    if (!this.paused) this.tick(dt);
+    if (!this.paused && !this.menuOpen) this.tick(dt);
     this.input.endFrame();
     this.engine.render();
   }
@@ -375,41 +445,46 @@ class Game {
   tick(dt) {
     const { player, director, fx } = this;
 
+    if (this.comboTimer > 0) { this.comboTimer -= dt; if (this.comboTimer <= 0) this.combo = 0; }
+
     player.update(dt, this.input);
-    director.update(dt, player, (mage) => {
-      this.fx.fireBolt(mage.position, player.position);
+    director.update(dt, player, (e) => {
+      const target = e._target ?? player.position;
+      fx.fireBolt(e.position, target, {
+        color: e.def.projectile?.color, speed: e.def.projectile?.speed,
+        damage: e.def.damage, status: e.def.onHitStatus,
+      });
       this.sfx.swing();
     });
     this.physics.step();
     player.syncFromPhysics();
-    for (const enemy of director.enemies) {
-      if (!enemy.dead) enemy.syncFromPhysics();
-    }
+    for (const enemy of director.enemies) if (!enemy.dead) enemy.syncFromPhysics();
 
-    // Damage-over-time (poison): apply in ~0.4s chunks so kills route normally.
+    // DoTs (poison/burn) in 0.4s chunks.
     const now = performance.now();
     for (const enemy of director.aliveEnemies) {
-      const dot = enemy.dot;
-      if (!dot || now - dot.last < 400) continue;
-      const chunk = dot.dps * ((now - dot.last) / 1000);
-      dot.last = now;
-      if (now >= dot.until) enemy.dot = null;
-      this.applyDamage(enemy, chunk, enemy.position.clone().setZ(enemy.position.z - 0.5), 0, false, 'dot');
+      for (const dk of ['poison', 'burn']) {
+        const s = enemy.status[dk];
+        if (!s || !s.dps || now - s.last < 400) continue;
+        const chunk = s.dps * ((now - s.last) / 1000);
+        s.last = now;
+        this.applyDamage(enemy, chunk, enemy.position.clone().setZ(enemy.position.z - 0.5), 0, false, dk);
+      }
     }
 
     fx.update(dt);
-    fx.updateOrbs(dt, player.position, (xp) => {
-      player.gainXp(xp);
-      this.sfx.orb();
-    });
-    for (const hitPos of fx.updateBolts(dt, player.position)) {
-      if (player.takeDamage(10)) this.hud.damageNumber(player.position, 10, 'player-hit');
+    fx.updateOrbs(dt, player.position, (xp) => { player.gainXp(xp); this.sfx.orb(); });
+    fx.updatePickups(dt, player.position, (kind) => this.collectPickup(kind));
+    for (const hit of fx.updateBolts(dt, player.position)) {
+      if (player.takeDamage(hit.damage)) {
+        this.hud.damageNumber(player.position, hit.damage, 'player-hit');
+        if (hit.status?.type === 'chill') player.applyChill(hit.status.factor, hit.status.duration);
+        else if (hit.status?.type === 'poison') player.applyPoison(hit.status.dps, hit.status.duration);
+        this.onPlayerHurt();
+      }
     }
-    // Player fireballs explode into an AoE on impact.
     fx.updatePlayerBolts(dt, director.aliveEnemies, (pos, effect) => {
-      this.fx.ringBurst(pos, effect.radius, effect.color);
-      this.fx.hitSpark(pos);
-      this.engine.addShake(0.2);
+      this.fx.burst(pos, effect.radius, effect.color);
       for (const enemy of director.aliveEnemies) {
         if (enemy.position.distanceTo(pos) <= effect.radius + enemy.def.radius) {
           const crit = Math.random() < player.stats.critChance;
@@ -422,8 +497,14 @@ class Game {
 
     this.torches.update(player.position, dt);
     this.engine.followCamera(player.position, dt);
-    this.hud.update(player, director);
+    this.hud.update(player, director, { score: this.score, combo: this.combo });
+    if (this.bossRef && !this.bossRef.dead) this.hud.updateBossBar(this.bossRef.hp, this.bossRef.maxHp);
     this.hud.drawMinimap(this.rooms, this.layout.corridors, player.position, this.assets.gridSize);
+  }
+
+  onPlayerHurt() {
+    this.hud.flashHurt();
+    this.engine.addShake(0.18);
   }
 }
 

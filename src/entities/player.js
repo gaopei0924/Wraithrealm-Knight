@@ -53,6 +53,11 @@ export class Player {
     this.skillCd = [0, 0];
     this.buff = null; // { damageMult, lifesteal, until }
 
+    // Statuses inflicted by enemies (chill slows, poison drains).
+    this.chill = null; // { factor, until }
+    this.poison = null; // { dps, until, last }
+    this.gold = 0;
+
     this.events = { onSwing: null, onSkill: null, onDeath: null, onLevelUp: null };
     this.char.play('Idle');
 
@@ -84,6 +89,19 @@ export class Player {
     this.skillCd = this.loadout.map(() => 0);
   }
 
+  applyChill(factor, duration) {
+    this.chill = { factor, until: performance.now() + duration * 1000 };
+  }
+
+  applyPoison(dps, duration) {
+    const now = performance.now();
+    this.poison = { dps, until: now + duration * 1000, last: now };
+  }
+
+  get moveFactor() {
+    return this.chill && performance.now() < this.chill.until ? this.chill.factor : 1;
+  }
+
   addSkill(id) {
     if (!SKILLS[id] || this.loadout.some((s) => s.id === id)) return;
     this.loadout = [...this.loadout, SKILLS[id]];
@@ -113,6 +131,16 @@ export class Player {
     }
     this.mp = Math.min(this.stats.maxMp, this.mp + this.stats.mpRegen * dt);
     if (this.buff && performance.now() > this.buff.until) this.buff = null;
+
+    // Poison drain (bypasses i-frames; cannot itself kill below 1 — chip damage).
+    if (this.poison) {
+      const now = performance.now();
+      if (now >= this.poison.until) this.poison = null;
+      else if (now - this.poison.last >= 400) {
+        this.poison.last = now;
+        this.hp = Math.max(1, this.hp - this.poison.dps * 0.4);
+      }
+    }
 
     if (this.hitInvulnLeft > 0) {
       this.hitInvulnLeft -= dt;
@@ -166,7 +194,7 @@ export class Player {
     if (this.tryConsumeActions(input, move)) return;
 
     if (move.x !== 0 || move.z !== 0) {
-      const speed = this.stats.moveSpeed;
+      const speed = this.stats.moveSpeed * this.moveFactor;
       this.physics.moveActor(this.actor, move.x * speed * dt, move.z * speed * dt);
       this.char.faceToward(Math.atan2(move.x, move.z), dt);
       this.char.play('Running_A', { timeScale: 1.15 });
