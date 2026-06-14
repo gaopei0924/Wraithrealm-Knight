@@ -73,6 +73,22 @@ export const SKILLS = {
     mp: 34, cooldown: 9, anim: 'Spellcast_Raise', animSpeed: 1.3, hitAt: 0.4, sfx: 'potion',
     effect: { type: 'buff', duration: 0.1, healInstant: 55, color: 0x66dd66 },
   },
+  // --- new mechanics ---
+  summon: {
+    id: 'summon', name: '亡魂召喚', icon: 'chain', desc: '召喚兩具骷髏亡魂助戰 12 秒',
+    mp: 40, cooldown: 16, anim: 'Spellcast_Raise', animSpeed: 1.2, hitAt: 0.42, sfx: 'levelUp',
+    effect: { type: 'summon', companions: ['imp', 'bone_ranger'], duration: 12, color: 0x9fe6ff },
+  },
+  timewarp: {
+    id: 'timewarp', name: '時滯力場', icon: 'frost', desc: '凍結時間，大幅減速全場敵人 4 秒',
+    mp: 45, cooldown: 14, anim: 'Spellcast_Raise', animSpeed: 1.1, hitAt: 0.45, sfx: 'whirl',
+    effect: { type: 'slowfield', range: 13, slow: { factor: 0.25, duration: 4 }, color: 0x9fb8ff },
+  },
+  meteor: {
+    id: 'meteor', name: '隕石轟擊', icon: 'fireball', desc: '召喚隕石砸向前方，巨大範圍爆傷',
+    mp: 48, cooldown: 11, anim: 'Spellcast_Shoot', animSpeed: 1.3, hitAt: 0.4, sfx: 'whirl',
+    effect: { type: 'meteor', damage: 90, range: 4.2, dist: 5, knockback: 9, color: 0xff7a22, delay: 0.5 },
+  },
 };
 
 export const SKILL_LIST = Object.values(SKILLS);

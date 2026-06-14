@@ -9,10 +9,12 @@ const AGGRO_RANGE = 12;
 // Pure-kinematic (no physics body) — floats/walks toward its target and lerps
 // back to an orbit slot around the player when idle.
 export class Companion {
-  constructor(def, charData, scene, slotIndex = 0, level = 1) {
+  constructor(def, charData, scene, slotIndex = 0, level = 1, ttl = null) {
     this.def = def;
     this.level = level;
     this.slot = slotIndex;
+    this.ttl = ttl;           // seconds of life for temporary summons (null = permanent)
+    this.expired = false;
     this.char = new Character(charData, scene, def.scale ?? 1, def.aliases ?? null);
     if (def.color) this.char.setTint(def.color, 0.35);
     this.char.setAura(def.color ?? 0x88aaff, 0.25); // ghostly glow so allies read as friendly
@@ -36,6 +38,7 @@ export class Companion {
   update(dt, playerPos, ctx) {
     this.cooldown = Math.max(0, this.cooldown - dt);
     this.animLock = Math.max(0, this.animLock - dt);
+    if (this.ttl != null) { this.ttl -= dt; if (this.ttl <= 0) { this.expired = true; return; } }
     const pos = this.position;
 
     // pick nearest living enemy in range

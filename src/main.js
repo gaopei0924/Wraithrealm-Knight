@@ -136,6 +136,7 @@ class Game {
     this.player = new Player(charData, this.engine.scene, this.physics, this.sfx, charDef.aliases);
     this.player.applyCharacter(charDef);
     this.companions = [];
+    this.pendingMeteors = [];
     this.wirePlayerEvents();
     // chosen skills + the hero's signature skill (deduped, capped at 8)
     const ids = [...new Set([...(loadoutIds ?? []), charDef.signature])].slice(0, 8);
@@ -327,7 +328,44 @@ class Game {
         this.fx.ringBurst(origin, 2.6, fx.color);
         if (fx.invuln) this.hud.announce('聖盾庇護', ''); else if (fx.damageMult) this.hud.announce('狂暴', '');
         break;
+      case 'summon':
+        this.fx.ringBurst(origin, 3, fx.color);
+        for (const id of fx.companions ?? ['imp']) this.addCompanion(id, fx.duration);
+        break;
+      case 'slowfield':
+        this.fx.ringBurst(origin, fx.range, fx.color);
+        this.fx.telegraph(origin, fx.range, fx.color, 0.4);
+        this.engine.addShake(0.2);
+        for (const e of this.director.aliveEnemies) {
+          if (e.position.distanceTo(origin) <= fx.range) e.applySlow(fx.slow.factor, fx.slow.duration);
+        }
+        break;
+      case 'meteor': {
+        const pt = new THREE.Vector3(origin.x + Math.sin(facing) * fx.dist, 0, origin.z + Math.cos(facing) * fx.dist);
+        this.fx.telegraph(pt, fx.range, fx.color, fx.delay);
+        this.pendingMeteors.push({ pt, fx, damage, at: performance.now() + fx.delay * 1000 });
+        break;
+      }
     }
+  }
+
+  // Resolve delayed meteor impacts (driven from tick so pause/hit-stop respect it).
+  updateMeteors() {
+    if (!this.pendingMeteors?.length) return;
+    const now = performance.now();
+    this.pendingMeteors = this.pendingMeteors.filter((m) => {
+      if (now < m.at) return true;
+      this.fx.burst(m.pt, m.fx.range, m.fx.color);
+      this.engine.addShake(0.45);
+      this.setHitStop(60);
+      for (const e of this.director.aliveEnemies) {
+        if (e.position.distanceTo(m.pt) <= m.fx.range + e.def.radius) {
+          const crit = Math.random() < this.player.stats.critChance;
+          this.applyDamage(e, m.damage * (crit ? this.player.stats.critMult : 1), m.pt, m.fx.knockback ?? 6, crit);
+        }
+      }
+      return false;
+    });
   }
 
   applyNova(origin, fx, damage) {
@@ -578,6 +616,7 @@ class Game {
     player.update(dt, this.input);
     this.updateSurvivors(dt);
     this.updateCompanions(dt);
+    this.updateMeteors();
     if (player.state === 'roll') fx.trail(player.position);
     director.update(dt, player, (e) => {
       const target = e._target ?? player.position;
@@ -724,22 +763,24 @@ class Game {
   }
 
   // --- Companions (同伴) ---------------------------------------------------
-  // Recruit a companion. If already owned, level it up instead (stronger).
-  async addCompanion(id) {
+  // Recruit a companion. ttl set ⇒ a temporary summoned ally (skill). A
+  // permanent recruit of an already-owned companion levels it up instead.
+  async addCompanion(id, ttl = null) {
     const def = COMPANIONS[id];
     if (!def) return;
-    const existing = this.companions.find((c) => c.def.id === id);
-    if (existing) { existing.level++; this.hud.toast(`${def.name} 強化`, `等級 ${existing.level}`); return; }
-    if (this.companions.length >= 6) return;
+    if (!ttl) {
+      const existing = this.companions.find((c) => c.def.id === id && c.ttl == null);
+      if (existing) { existing.level++; this.hud.toast(`${def.name} 強化`, `等級 ${existing.level}`); return; }
+    }
+    if (this.companions.length >= (ttl ? 9 : 6)) return;
     const charData = await this.assets.character(def.model);
-    const comp = new Companion(def, charData, this.engine.scene, this.companions.length, 1);
+    const comp = new Companion(def, charData, this.engine.scene, this.companions.length, 1, ttl);
     const p = this.player.position;
     comp.setPosition(p.x + (Math.random() - 0.5) * 2, p.z + (Math.random() - 0.5) * 2);
     this.companions.push(comp);
-    this.player.companionIds.push(id);
     this.fx.ringBurst(comp.position, 2.2, def.color ?? 0x88aaff);
-    this.hud.announce('同伴加入', def.name);
-    this.hud.toast('召喚同伴', `${def.name} 加入戰鬥`);
+    if (ttl) { this.hud.toast('亡魂召喚', `${def.name} (${ttl}s)`); }
+    else { this.player.companionIds.push(id); this.hud.announce('同伴加入', def.name); this.hud.toast('召喚同伴', `${def.name} 加入戰鬥`); }
     this.sfx.levelUp?.();
   }
 
@@ -763,6 +804,11 @@ class Game {
       },
     };
     for (const c of this.companions) c.update(dt, this.player.position, ctx);
+    // retire expired temporary summons
+    if (this.companions.some((c) => c.expired)) {
+      for (const c of this.companions) if (c.expired) c.dispose(this.engine.scene);
+      this.companions = this.companions.filter((c) => !c.expired);
+    }
   }
 
   // Re-create the persistent passive-weapon visuals from current levels.
