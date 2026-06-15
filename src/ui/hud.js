@@ -143,7 +143,29 @@ export class Hud {
 
     let chosenChar = 'knight';
     let chosenDiff = 'normal';
+    let chosenMode = 'story';
     const chosenSkills = [...DEFAULT_LOADOUT];
+
+    // mode cards (劇情 / 無盡)
+    const modeRow = $('mode-row');
+    if (modeRow) {
+      const MODES = [
+        { id: 'story', name: '劇情', sub: 'STORY', desc: '15 關 · 擊敗終焉之王通關' },
+        { id: 'endless', name: '無盡試煉', sub: 'ENDLESS', desc: '波次永不停歇 · 比拚存活與分數' },
+      ];
+      modeRow.innerHTML = '';
+      for (const m of MODES) {
+        const card = document.createElement('button');
+        card.className = 'setup-card diff' + (m.id === chosenMode ? ' selected' : '');
+        card.innerHTML = `<div class="card-name">${m.name}</div><div class="card-sub">${m.sub}</div><div class="card-desc">${m.desc}</div>`;
+        card.addEventListener('click', () => {
+          chosenMode = m.id;
+          for (const c of modeRow.children) c.classList.remove('selected');
+          card.classList.add('selected');
+        });
+        modeRow.appendChild(card);
+      }
+    }
 
     // character cards
     charRow.innerHTML = '';
@@ -201,7 +223,7 @@ export class Hud {
     $('setup').classList.remove('hidden');
     startBtn.addEventListener('click', () => {
       if (chosenSkills.length !== STARTING_SLOTS) return;
-      onConfirm(difficulties[chosenDiff], chosenSkills, chosenChar);
+      onConfirm(difficulties[chosenDiff], chosenSkills, chosenChar, chosenMode);
     }, { once: true });
   }
 
@@ -437,9 +459,10 @@ export class Hud {
 
   showEnd(title, s) {
     $('end-title').textContent = title;
-    $('end-sub').textContent = `${s.difficulty}難度 · 第 ${s.stage} 關`;
+    $('end-sub').textContent = s.endless ? `無盡試煉 · ${s.difficulty}難度 · 第 ${s.waves} 波` : `${s.difficulty}難度 · 第 ${s.stage} 關`;
     const mins = Math.floor(s.time / 60), secs = s.time % 60;
     const rows = [
+      ...(s.endless ? [['存活波次', `${s.waves} 波`]] : []),
       ['分數', s.newBest ? `${s.score} ★新紀錄` : s.score],
       ['最高分', s.highScore],
       ['擊殺', s.kills],

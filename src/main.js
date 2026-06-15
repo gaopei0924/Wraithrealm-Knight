@@ -138,16 +138,17 @@ class Game {
     for (const [id, def] of Object.entries(CHARACTERS)) {
       if (BASE_CLASSES.has(id) || Save.classUnlocked(id)) unlocked[id] = def;
     }
-    this.hud.showSetup(DIFFICULTIES, unlocked, (difficulty, loadoutIds, characterId) =>
-      this.beginRun(difficulty, loadoutIds, characterId));
+    this.hud.showSetup(DIFFICULTIES, unlocked, (difficulty, loadoutIds, characterId, mode) =>
+      this.beginRun(difficulty, loadoutIds, characterId, mode));
     const sc = document.getElementById('souls-count');
     if (sc) sc.textContent = `魂晶 ${Save.souls}`;
   }
 
-  async beginRun(difficulty, loadoutIds, characterId) {
+  async beginRun(difficulty, loadoutIds, characterId, mode = 'story') {
     if (this.started) return;
     this.started = true;
     this.difficulty = difficulty;
+    this.endless = mode === 'endless';
     // Swap the setup screen for a progress bar so there's no black screen while
     // the hero + dungeon build.
     document.getElementById('setup').classList.add('hidden');
@@ -198,7 +199,8 @@ class Game {
 
   async loadStage(index, onBuildProgress = null) {
     this.stageIndex = index;
-    const stage = STAGES[index];
+    // Endless plays in one dramatic, roomier arena.
+    const stage = this.endless ? STAGES[Math.min(4, STAGES.length - 1)] : STAGES[index];
     if (this.builder) this.builder.dispose();
     if (this.torches) this.torches.dispose();
     if (this.director) this.director.disposeAll();
@@ -211,7 +213,9 @@ class Game {
 
     const wavePlans = buildWavePlans(stage, this.difficulty);
     this.layout = generateLayout(Math.floor(Math.random() * 1e9), {
-      combatCount: stage.combatCount, sizeScale: stage.sizeScale, wavePlans,
+      combatCount: this.endless ? 4 : stage.combatCount,
+      sizeScale: this.endless ? (stage.sizeScale ?? 1) * 1.15 : stage.sizeScale,
+      wavePlans,
     });
     this.builder = new DungeonBuilder(this.assets, this.physics, this.engine.scene);
     this.rooms = await this.builder.build(this.layout, stage.theme, onBuildProgress);
@@ -228,7 +232,7 @@ class Game {
     this.director = new WaveDirector({
       rooms: this.rooms, builder: this.builder, assets: this.assets, scene: this.engine.scene,
       physics: this.physics, sfx: this.sfx, mods: enemyMods(this.difficulty, stage),
-      eliteChance: stage.eliteChance ?? 0, bossType: stage.boss,
+      eliteChance: stage.eliteChance ?? 0, bossType: stage.boss, endless: this.endless,
       events: {
         onWaveStart: () => { this.waveNumber++; this.hud.setWave(this.waveNumber); this.hud.announce(`WAVE ${this.waveNumber}`); },
         onRoomCleared: () => {
@@ -247,9 +251,15 @@ class Game {
     await this.director.preloadCharacters();
     this.director.kills = this.totalKills;
 
-    this.hud.setObjective(`${stage.name}：消滅所有敵人`);
-    this.hud.setStageTag(index + 1, STAGES.length, stage.name);
-    this.hud.announce(`第 ${index + 1} 關 · ${stage.name}`, stage.subtitle);
+    if (this.endless) {
+      this.hud.setObjective('無盡生存 · 撐到最後！');
+      this.hud.setStageTag('∞', '∞', '無盡試煉');
+      this.hud.announce('無盡試煉', '波次永不停歇，活下去！');
+    } else {
+      this.hud.setObjective(`${stage.name}：消滅所有敵人`);
+      this.hud.setStageTag(index + 1, STAGES.length, stage.name);
+      this.hud.announce(`第 ${index + 1} 關 · ${stage.name}`, stage.subtitle);
+    }
     this.sfx.gate();
     this.checkAchievements();
   }
@@ -332,6 +342,7 @@ class Game {
   wirePlayerEvents() {
     const player = this.player;
     player.events.onSwing = (swing) => this.resolveArcHit(swing, 0xffc878);
+    player.events.onShoot = (shot) => { this.fx.firePlayerBolt(shot.origin, shot.facing, shot.projectile); this.sfx.swing(); };
     player.events.onSkill = (ctx) => this.resolveSkill(ctx);
     player.events.onLevelUp = (lvl) => this.levelUp(lvl);
     player.events.onDeath = () => this.defeat();
@@ -618,8 +629,8 @@ class Game {
   finishRun(title) {
     const secs = Math.round((performance.now() - this.runStart) / 1000);
     const best = Save.recordScore(this.score, this.stageIndex);
-    // Bank 魂晶 for meta-progression.
-    const souls = soulReward({ score: this.score, stage: this.stageIndex + 1, kills: this.director.kills, bossKills: this.bossKills });
+    // Bank 魂晶 for meta-progression (Endless pays a bonus).
+    const souls = Math.round(soulReward({ score: this.score, stage: this.stageIndex + 1, kills: this.director.kills, bossKills: this.bossKills }) * (this.endless ? 1.6 : 1));
     Save.addSouls(souls);
     Save.flush();
     setTimeout(() => {
@@ -628,6 +639,7 @@ class Game {
         score: this.score, bestCombo: this.bestCombo, time: secs, gold: this.player.gold,
         difficulty: this.difficulty.name, highScore: Save.highScore, newBest: best,
         damage: Math.round(this.damageDealt), bestiary: Save.bestiaryCount(), souls,
+        endless: this.endless, waves: this.director.globalWave,
       });
     }, 1400);
   }
@@ -738,7 +750,7 @@ class Game {
       if (dd < best) { best = dd; near = e; }
     }
     const dist = Math.sqrt(best);
-    if (Save.autoAttack && (p.state === 'idle' || p.state === 'move') && dist < 3.4) {
+    if (Save.autoAttack && (p.state === 'idle' || p.state === 'move') && dist < p.attackRange) {
       p.char.snapFacing(Math.atan2(near.position.x - p.position.x, near.position.z - p.position.z));
       this.input.triggerAttack();
     }

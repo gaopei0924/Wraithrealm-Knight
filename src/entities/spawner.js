@@ -1,4 +1,4 @@
-import { Enemy, ENEMY_TYPES, ELITE_AFFIXES } from './enemy.js';
+import { Enemy, ENEMY_TYPES, ELITE_AFFIXES, MONSTER_KEYS } from './enemy.js';
 import { Boss } from './boss.js';
 import { BOSSES } from '../combat/bosses.js';
 
@@ -10,7 +10,7 @@ const BASE_MODELS = [
 // Per-room wave director: locks gates when the player enters an uncleared
 // combat room, spawns waves, then a boss in the final room, then unlocks.
 export class WaveDirector {
-  constructor({ rooms, builder, assets, scene, physics, sfx, events, mods, eliteChance, bossType }) {
+  constructor({ rooms, builder, assets, scene, physics, sfx, events, mods, eliteChance, bossType, endless }) {
     this.rooms = rooms;
     this.builder = builder;
     this.assets = assets;
@@ -21,6 +21,9 @@ export class WaveDirector {
     this.mods = mods ?? { hp: 1, damage: 1, speed: 1 };
     this.eliteChance = eliteChance ?? 0;
     this.bossType = bossType ?? null;
+    this.endless = endless ?? false;
+    this.endlessBatch = 0;
+    this.endlessTimer = 1.2;
 
     this.enemies = [];
     this.activeRoom = null;
@@ -36,6 +39,8 @@ export class WaveDirector {
   async preloadCharacters() {
     const models = new Set(BASE_MODELS);
     if (this.bossType && BOSSES[this.bossType]) models.add(BOSSES[this.bossType].model);
+    // Endless spawns random bosses — preload them all so there's no mid-run hitch.
+    if (this.endless) for (const b of Object.values(BOSSES)) models.add(b.model);
     for (const m of models) await this.assets.loadGltf(`/assets/characters/${m}.glb`);
   }
 
@@ -47,7 +52,9 @@ export class WaveDirector {
 
   update(dt, player, fireProjectile) {
     this.player = player;
-    if (!this.activeRoom && player.alive) {
+    if (this.endless) {
+      if (player.alive) this.endlessTick(dt, player);
+    } else if (!this.activeRoom && player.alive) {
       const room = this.roomAt(player.position);
       const margin = 1.5;
       if (
@@ -88,11 +95,47 @@ export class WaveDirector {
       return true;
     });
 
-    // Goblins never block room completion.
-    if (this.activeRoom && this.pendingSpawns.length === 0 &&
+    // Goblins never block room completion. (Endless never auto-advances.)
+    if (!this.endless && this.activeRoom && this.pendingSpawns.length === 0 &&
         !this.enemies.some((e) => !e.dead && e.type !== 'goblin')) {
       this.advanceWave(player);
     }
+  }
+
+  // Continuous escalating spawns for Endless Survival — waves never stop, get
+  // bigger/harder over time, and a random boss arrives every few batches.
+  endlessTick(dt, player) {
+    this.endlessTimer -= dt;
+    const aliveMobs = this.enemies.filter((e) => !e.dead && !e.isBoss && e.type !== 'goblin').length;
+    if (this.endlessTimer > 0 || aliveMobs > 70) return;
+    this.endlessBatch++;
+    this.endlessTimer = Math.max(2.0, 5.5 - this.endlessBatch * 0.12);
+    this.globalWave++;
+    this.events.onWaveStart?.(this.globalWave);
+    const room = this.roomAt(player.position);
+    // boss every 6th batch
+    if (this.endlessBatch % 6 === 0) {
+      const keys = Object.keys(BOSSES);
+      this.bossType = keys[(this.endlessBatch / 6 - 1) % keys.length | 0];
+      this.activeRoom = room ?? this.rooms[0];
+      this.bossSpawned = false;
+      this.spawnBoss(player);
+      return;
+    }
+    const count = Math.min(26, 4 + Math.floor(this.endlessBatch * 1.3));
+    const pool = MONSTER_KEYS.slice(0, Math.min(MONSTER_KEYS.length, 3 + Math.floor(this.endlessBatch / 2)));
+    const now = performance.now();
+    for (let i = 0; i < count; i++) {
+      const type = pool[Math.floor(Math.random() * pool.length)];
+      const sp = room ? this.pickSpawnPoint(room, player) : this.ringPoint(player);
+      const elite = Math.random() < this.eliteChance + this.endlessBatch * 0.01;
+      this.pendingSpawns.push({ type, x: sp.x, z: sp.z, elite, wave: this.globalWave, at: now + i * 110 });
+    }
+  }
+
+  ringPoint(player) {
+    const a = Math.random() * Math.PI * 2, d = 12 + Math.random() * 4;
+    return { x: player.position.x + Math.cos(a) * d, z: player.position.z + Math.sin(a) * d };
   }
 
   engageRoom(room, player) {

@@ -1,14 +1,9 @@
 import * as THREE from 'three';
 import { Character } from './character.js';
 import { SKILLS, DEFAULT_LOADOUT, SKILL_KEYS } from '../combat/skills.js';
+import { ATTACK_STYLES, DEFAULT_STYLE } from '../combat/attackstyles.js';
 
 const HIDDEN_MESHES = ['1H_Sword_Offhand', 'Badge_Shield', 'Rectangle_Shield', 'Spike_Shield', '2H_Sword'];
-
-const COMBO = [
-  { anim: '1H_Melee_Attack_Chop', damage: 18, range: 3.0, arc: 1.2, hitAt: 0.38, speed: 1.65 },
-  { anim: '1H_Melee_Attack_Slice_Diagonal', damage: 20, range: 3.0, arc: 1.3, hitAt: 0.36, speed: 1.65 },
-  { anim: '1H_Melee_Attack_Slice_Horizontal', damage: 34, range: 3.4, arc: 1.7, hitAt: 0.4, speed: 1.45 },
-];
 
 const ROLL_TIME = 0.42;
 const ROLL_SPEED = 14;
@@ -73,7 +68,10 @@ export class Player {
     this.reviveCharges = 0; // Second Wind upgrade
     this.lastDodge = 0;
 
-    this.events = { onSwing: null, onSkill: null, onDeath: null, onLevelUp: null, onDodge: null, onRevive: null };
+    this.events = { onSwing: null, onShoot: null, onSkill: null, onDeath: null, onLevelUp: null, onDodge: null, onRevive: null };
+    // Basic-attack style (sword by default; set per-character in applyCharacter).
+    this.attackStyle = ATTACK_STYLES[DEFAULT_STYLE];
+    this.combo = this.attackStyle.combo ?? null;
     this.char.play('Idle');
 
     // Player carries a faint warm light so they're always readable in the dark.
@@ -120,8 +118,17 @@ export class Player {
     this.hp = this.stats.maxHp;
     this.mp = this.stats.maxMp;
     this.character = def;
+    if (def.attackStyle && ATTACK_STYLES[def.attackStyle]) {
+      this.attackStyle = ATTACK_STYLES[def.attackStyle];
+      this.combo = this.attackStyle.combo ?? null;
+    }
     if (def.tint) this.char.setTint(def.tint, 0.4);
     if (def.modelScale) this.char.model.scale.setScalar(def.modelScale);
+  }
+
+  // How close auto-attack should engage — short for melee, long for ranged.
+  get attackRange() {
+    return this.attackStyle?.range ?? 3.4;
   }
 
   applyChill(factor, duration) {
@@ -242,10 +249,20 @@ export class Player {
   }
 
   startAttack(stage) {
+    this.enterState('attack');
+    if (this.attackStyle.kind === 'ranged') {
+      this.shootDone = false;
+      const st = this.attackStyle;
+      const spd = st.speed * this.stats.atkSpeed;
+      this.attackDuration = this.char.clipDuration(st.anim) / spd;
+      this.char.play(st.anim, { fade: 0.08, loop: false, timeScale: spd, force: true });
+      this.sfx.swing();
+      return;
+    }
+    // melee combo
     this.comboStage = stage;
     this.comboHitDone = false;
-    this.enterState('attack');
-    const def = COMBO[stage];
+    const def = this.combo[stage];
     const spd = def.speed * this.stats.atkSpeed;
     this.attackDuration = this.char.clipDuration(def.anim) / spd;
     this.char.play(def.anim, { fade: 0.08, loop: false, timeScale: spd, force: true });
@@ -253,9 +270,24 @@ export class Player {
   }
 
   updateAttack(dt, input) {
-    const def = COMBO[this.comboStage];
     const progress = this.stateTime / this.attackDuration;
 
+    if (this.attackStyle.kind === 'ranged') {
+      const st = this.attackStyle;
+      if (!this.shootDone && progress >= st.fireAt) {
+        this.shootDone = true;
+        this.events.onShoot?.({
+          origin: this.position.clone(),
+          facing: this.char.facing,
+          projectile: { ...st.projectile, damage: st.projectile.damage }, // damageMult applied on impact
+        });
+      }
+      if (input.consumeRoll() && this.rollCooldownLeft <= 0 && progress > 0.3) { this.startRoll(input.moveVector); return; }
+      if (progress >= 1) this.enterState('idle');
+      return;
+    }
+
+    const def = this.combo[this.comboStage];
     // small forward step during the swing
     if (progress > 0.15 && progress < 0.5) {
       this.physics.moveActor(
@@ -267,7 +299,7 @@ export class Player {
 
     if (!this.comboHitDone && progress >= def.hitAt) {
       this.comboHitDone = true;
-      const isFinisher = this.comboStage === COMBO.length - 1;
+      const isFinisher = this.comboStage === this.combo.length - 1;
       const damage = def.damage * this.damageMult * (isFinisher ? this.stats.comboFinisherBonus : 1);
       this.events.onSwing?.({
         origin: this.position.clone(),
@@ -275,12 +307,13 @@ export class Player {
         range: def.range,
         arc: def.arc,
         damage,
+        knock: def.knock,
         finisher: isFinisher,
       });
     }
 
     // combo chaining window
-    if (progress > 0.55 && input.consumeAttack() && this.comboStage < COMBO.length - 1) {
+    if (progress > 0.55 && input.consumeAttack() && this.comboStage < this.combo.length - 1) {
       this.startAttack(this.comboStage + 1);
       return;
     }
