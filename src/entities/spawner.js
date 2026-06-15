@@ -70,7 +70,11 @@ export class WaveDirector {
     this.pendingSpawns = this.pendingSpawns.filter((spawn) => {
       if (now >= spawn.at) {
         const affix = spawn.elite ? ELITE_AFFIXES[Math.floor(Math.random() * ELITE_AFFIXES.length)] : null;
-        this.spawnEnemy(spawn.type, spawn.x, spawn.z, player, { elite: spawn.elite, affix, waveHp: 50 * Math.max(0, (spawn.wave ?? 1) - 1) });
+        const w = Math.max(0, (spawn.wave ?? 1) - 1);
+        // Endless waves climb forever, so use a gentler, capped per-wave HP bonus;
+        // story rooms are bounded so keep the original +50/wave.
+        const waveHp = this.endless ? Math.min(420, 20 * w) : 50 * w;
+        this.spawnEnemy(spawn.type, spawn.x, spawn.z, player, { elite: spawn.elite, affix, waveHp });
         return false;
       }
       return true;

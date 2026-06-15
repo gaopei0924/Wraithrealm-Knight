@@ -55,8 +55,8 @@ export class Hud {
   // --- pause menu + settings ---
   wireMenu(cfg) {
     const { onToggle, onResume, onRestart, onVolume, volume, onHelp, onFullscreen,
-      onShake, onMute, onMusic, onAutoAtk, onAutoCast,
-      shake = true, muted = false, music = true, autoAttack = true, autoCast = true, fsAvailable = true } = cfg;
+      onShake, onMute, onMusic, onAutoAtk, onAutoCast, onAimAssist,
+      shake = true, muted = false, music = true, autoAttack = true, autoCast = true, aimAssist = true, fsAvailable = true } = cfg;
     $('pause-btn').addEventListener('click', () => onToggle());
     $('menu-btn').addEventListener('click', () => onToggle());
     $('resume-btn').addEventListener('click', () => onResume());
@@ -83,6 +83,8 @@ export class Hud {
     aaBox.addEventListener('change', () => onAutoAtk(aaBox.checked));
     const acBox = $('toggle-autocast'); acBox.checked = autoCast;
     acBox.addEventListener('change', () => onAutoCast(acBox.checked));
+    const aimBox = $('toggle-aim');
+    if (aimBox) { aimBox.checked = aimAssist; aimBox.addEventListener('change', () => onAimAssist?.(aimBox.checked)); }
   }
 
   // Help/controls overlay. Lists the live skill keybinds from the loadout.

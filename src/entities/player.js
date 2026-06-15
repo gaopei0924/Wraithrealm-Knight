@@ -22,7 +22,7 @@ export class Player {
 
     this.stats = {
       maxHp: 100, maxMp: 100,
-      damageMult: 1, moveSpeed: 7.2,
+      damageMult: 1.5, moveSpeed: 7.2, // base attack +50%
       rollCooldown: 1.0, mpRegen: 7,
       lifesteal: 0, critChance: 0.06, critMult: 1.8,
       xpMult: 1, comboFinisherBonus: 1,

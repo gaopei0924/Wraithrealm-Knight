@@ -12,6 +12,7 @@ const DEFAULT = {
   music: true,
   autoAttack: true,
   autoCast: true,
+  aimAssist: true, // ranged heroes auto-aim at the nearest enemy
   layout: {}, // key → { x, y } drag offsets for on-screen controls
   bestiary: {}, // monsterId → kill count
   achievements: {}, // id → true
@@ -60,10 +61,12 @@ export const Save = {
   get music() { return state.music; },
   get autoAttack() { return state.autoAttack; },
   get autoCast() { return state.autoCast; },
+  get aimAssist() { return state.aimAssist; },
   setShake(s) { state.shake = s; persist(); },
   setMusic(m) { state.music = m; persist(); },
   setAutoAttack(v) { state.autoAttack = v; persist(); },
   setAutoCast(v) { state.autoCast = v; persist(); },
+  setAimAssist(v) { state.aimAssist = v; persist(); },
   get layout() { return state.layout; },
   setLayout(key, x, y) { state.layout[key] = { x, y }; persist(); },
   resetLayout() { state.layout = {}; persist(); },

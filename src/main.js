@@ -92,8 +92,9 @@ class Game {
       onMusic: (on) => { Save.setMusic(on); if (on) this.sfx.startMusic(); else this.sfx.stopMusic(); },
       onAutoAtk: (v) => Save.setAutoAttack(v),
       onAutoCast: (v) => Save.setAutoCast(v),
+      onAimAssist: (v) => Save.setAimAssist(v),
       volume: Save.volume, shake: Save.shake, muted: Save.muted, music: Save.music,
-      autoAttack: Save.autoAttack, autoCast: Save.autoCast,
+      autoAttack: Save.autoAttack, autoCast: Save.autoCast, aimAssist: Save.aimAssist,
       fsAvailable: !!document.documentElement.requestFullscreen,
     });
     this.engine.shakeEnabled = Save.shake;
@@ -231,7 +232,10 @@ class Game {
 
     this.director = new WaveDirector({
       rooms: this.rooms, builder: this.builder, assets: this.assets, scene: this.engine.scene,
-      physics: this.physics, sfx: this.sfx, mods: enemyMods(this.difficulty, stage),
+      // Endless uses gentle base mods (its difficulty comes from per-wave HP +
+      // continuous pressure), not the dramatic arena stage's high statRamp.
+      physics: this.physics, sfx: this.sfx,
+      mods: enemyMods(this.difficulty, this.endless ? STAGES[0] : stage),
       eliteChance: stage.eliteChance ?? 0, bossType: stage.boss, endless: this.endless,
       events: {
         onWaveStart: () => { this.waveNumber++; this.hud.setWave(this.waveNumber); this.hud.announce(`WAVE ${this.waveNumber}`); },
@@ -750,6 +754,12 @@ class Game {
       if (dd < best) { best = dd; near = e; }
     }
     const dist = Math.sqrt(best);
+    // Aim assist: ranged heroes always face the nearest enemy so both auto and
+    // manual shots land on target (default on).
+    if (Save.aimAssist && near && p.attackStyle?.kind === 'ranged' &&
+        (p.state === 'idle' || p.state === 'move' || p.state === 'attack')) {
+      p.char.snapFacing(Math.atan2(near.position.x - p.position.x, near.position.z - p.position.z));
+    }
     if (Save.autoAttack && (p.state === 'idle' || p.state === 'move') && dist < p.attackRange) {
       p.char.snapFacing(Math.atan2(near.position.x - p.position.x, near.position.z - p.position.z));
       this.input.triggerAttack();
